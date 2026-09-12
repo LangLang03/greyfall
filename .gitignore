@@ -1,0 +1,6 @@
+build/
+.greyfall/
+.gftest/
+.gfbench/
+*.gsv
+*.gfc
