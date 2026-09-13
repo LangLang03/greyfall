@@ -9,6 +9,7 @@
 #include "core/ResolutionEngine.h"
 #include "core/SelfTest.h"
 #include "gen/WorldGen.h"
+#include "plot/Skeleton.h"
 #include "save/Chronicle.h"
 #include "save/SaveFile.h"
 #include "util/Fmt.h"
@@ -59,11 +60,31 @@ int cmdStatus(CliEnv& env, const Args&) {
     const Empire& p = st.empires[kPlayerId];
 
     out(style("═══ 灰域纪元 · " + st.epochName + " ═══", Style::Heading));
+    // 败亡状态必须在最上方显眼提示 —— 旧版本玩家失去全部领土后
+    // 界面仍显示"存活"，没有任何提示告诉他这一局已经结束了。
+    if (st.defeated) out(defeatText(st));
     TextTable t;
     t.header({"项目", "值"});
     t.row({"回合 (tick)", std::to_string(st.tick) + " 季"});
     t.row({"纪元", "#" + std::to_string(st.epochIndex) + (st.endless ? "（无尽）" : "")});
-    t.row({"当前幕", "第 " + std::to_string(static_cast<int>(st.plot.act)) + " 幕 / 7"});
+    // 幕次进度必须显示缺口，否则玩家无从知道主线为何不前进。
+    // 旧版只显示"第 1 幕 / 7"，而推进条件是「本幕解锁/提交 N 个结论」——
+    // 这个 N 从未在游戏内出现过，实测玩家 154 季卡在第一幕却看不到任何线索。
+    {
+        const ActInfo& act = actInfo(static_cast<int>(st.plot.act));
+        int committed = 0;
+        for (u16 c : st.plot.committedConclusions)
+            if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++committed;
+        int reached = 0;
+        for (u16 c : st.plot.conclusionsReached)
+            if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++reached;
+        const int progress = std::max(committed, reached);
+        std::string actLine = "第 " + std::to_string(static_cast<int>(st.plot.act)) + " 幕 / " +
+                              std::to_string(kActCount) + "（本幕 " + std::to_string(progress) + " / " +
+                              std::to_string(act.requiredConclusions) + " 项结论）";
+        if (st.plot.act >= kActCount) actLine = "全 " + std::to_string(kActCount) + " 幕已完成";
+        t.row({"当前幕", actLine});
+    }
     t.row({"全局词缀", st.modifierName.empty() ? "无" : st.modifierName});
     t.row({"难度", std::to_string(st.difficulty) + "（AI foresight " + std::to_string(st.aiForesight) + "）"});
     t.row({"帝国", p.name + "（" + std::string(speciesInfo(p.species).nameZh) + " / " +

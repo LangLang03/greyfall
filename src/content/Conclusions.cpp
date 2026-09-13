@@ -32,7 +32,11 @@ std::vector<ConclusionDef> buildConclusions() {
             d.rewardItem = static_cast<u16>((id * 5 + 11) % 130);
             d.rewardTech = static_cast<i16>((id % 96));
             d.trueConclusion = (k % 7 != 3);  // 少数结论是"看似真相"的陷阱
-            d.requireDiversity = true;
+            // 「多渠道印证」是**难度曲线**，不是开局门槛。
+            // 第 1 幕不要求多样性：玩家开局只有 6 条同渠道（DirectObservation）的
+            // 起手线索，要求 ≥3 渠道等于要求一个尚未存在的系统。
+            // 第 2 幕起逐步收紧（此时玩家已有间谍网络与异常解析两条额外渠道）。
+            d.requireDiversity = (act >= 1);
             d.requireInsider = (act >= 2);
             d.marketImpact = Fixed::pct(2 + (id % 9));
             // 合取范式：2~3 个子句，每子句 2~3 个候选线索（来自该幕的 48 个节点）

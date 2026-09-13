@@ -559,11 +559,16 @@ void aiConstructionPhase(GameState& st) {
     for (auto& e : st.empires) {
         if (e.isPlayer || !e.alive) continue;
         if ((st.tick + e.id) % 2 != 0) continue;
-        // 闲置资金门槛：至少要有 8 季收入以上的现金才考虑投资，
+        // 闲置资金门槛：至少要有 8 季收入的现金才考虑投资，
         // 且投资后仍需保留 3 季收入的周转金 —— 否则会把资金全部锁进建筑，
         // 导致市场采购与**贸易进口**停摆（实测贸易量跌到 0）。
-        Fixed reserve = e.lastIncome.rawValue() > 0 ? e.lastIncome * Fixed(8) : Fixed(5000);
-        if (reserve.rawValue() < Fixed(5000).rawValue()) reserve = Fixed(5000);
+        //
+        // 但不能只认流量：当国库远超收入时（旧版因市场结算缺陷出现过 6000 万
+        // 国库 / 70 cr 季收入的组合），8 季收入的门槛形同虚设，
+        // AI 永远不投资、现金无限堆积。这里补一个按存量计的下限。
+        Fixed flowReserve = e.lastIncome.rawValue() > 0 ? e.lastIncome * Fixed(8) : Fixed(5000);
+        Fixed stockReserve = e.treasury * Fixed::pct(20);
+        Fixed reserve = fxMax(fxMax(flowReserve, stockReserve), Fixed(5000));
         if (e.treasury.rawValue() < reserve.rawValue()) continue;
         // 每季最多建一项（受资源约束自然限速）
         (void)aiConstructBest(st, e.id);
@@ -584,6 +589,16 @@ bool aiConstructBest(GameState& st, u32 empire) {
             upkeepNow += buildingInfo(static_cast<int>(order.building)).upkeep;
     }
     Fixed income = fxMax(e->lastIncome, Fixed(0));
+    // 维护可持续性的资金来源：当季收入 + **国库存量的一部分**。
+    //
+    // 只用 lastIncome 是错的量纲：建筑维护是长期承诺，而帝国完全可以用
+    // 存量财富支付它。旧写法 `headroom = lastIncome − 在建维护` 在
+    // lastIncome ≈ 70 cr/季 时把门槛压到 upkeep ≤ 35，而 28 种建筑的维护
+    // 是 30~700 ⇒ **只有 3 种（聚变电厂 40 / 采矿网格 45 / 水培农场 30）能过闸**，
+    // 实测 11 个 AI 里 6 个"可建建筑数 = 0"，国库 6,000 万却无处可花。
+    // 现在允许按国库的 1%/季 补充维护预算（有上限，不会一次吃光存量）。
+    Fixed upkeepBudget = income + e->treasury * Fixed::pct(1);
+    if (upkeepBudget.rawValue() < income.rawValue()) upkeepBudget = income;
 
     // 1) 找出最大的产出缺口（需求 − 产出），据此决定优先建什么
     std::array<Fixed, kCommodityCount> gap{};
@@ -616,12 +631,16 @@ bool aiConstructBest(GameState& st, u32 empire) {
                     if (static_cast<int>(order.building) == b) dup = true;
                 if (dup) continue;
             }
-            // 代价 + 周转金：建造后仍须保留 3 季收入用于贸易与市场采购
-            Fixed buffer = e->lastIncome.rawValue() > 0 ? e->lastIncome * Fixed(3) : Fixed(2000);
+            // 代价 + 周转金：建造后仍须保留一笔现金用于贸易与市场采购。
+            // 周转金同样按流量与存量取较大者 —— 只按流量会让坐拥巨款的帝国
+            // 连一座 4,000 cr 的电厂都建不起（见上）。
+            Fixed buffer = fxMax(e->lastIncome.rawValue() > 0 ? e->lastIncome * Fixed(3) : Fixed(2000),
+                                 e->treasury * Fixed::pct(10));
             if (e->treasury.rawValue() < Fixed(bi.creditCost).rawValue() + buffer.rawValue()) continue;
-            // 维护可持续性：新增维护费不得超过「收入 − 现有维护」的一半
+            // 维护可持续性：新增维护费不得超过「可持续预算 − 现有维护」的一半。
+            // 预算 = 当季收入 + 国库存量的 1%/季（见上）。
             {
-                i64 headroom = static_cast<i64>(income.rawValue() / FIX) - upkeepNow;
+                i64 headroom = static_cast<i64>(upkeepBudget.rawValue() / FIX) - upkeepNow;
                 if (headroom <= 0) continue;
                 if (bi.upkeep * 2 > headroom) continue;
             }

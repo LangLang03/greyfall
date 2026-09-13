@@ -66,7 +66,10 @@ int cmdAdvance(CliEnv& env, const Args& args) {
     out(stateSummaryLine(env.st));
     out("已完成 " + std::to_string(ticksDone) + " 季推进。下一季：" +
         std::string(actTitle(static_cast<int>(env.st.plot.act))));
-    if (env.st.ended) {
+    // 失败优先于剧情结局：两者可能同时成立（例如在败亡当季也触发了剧情结局）。
+    if (env.st.defeated) {
+        out(defeatText(env.st));
+    } else if (env.st.ended) {
         const EndingInfo& en = endingInfo(env.st.endingId);
         out(style("【结局】" + std::string(en.nameZh), Style::Heading));
         out(wrapJoin(en.text, 86, "  "));

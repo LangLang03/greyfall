@@ -165,8 +165,14 @@ void generateAiFlow(GameState& st, int batch) {
                 // 国库百分比是几何式抽干：每季花掉 25% ⇒ 约 20 季抽空，
                 // 与收入完全脱钩（实测 AI 合计国库在 30 季内由 39 万跌到 -30 万）。
                 // 以收入为上限则天然可持续：支出随收入同步伸缩。
+                //
+                // 但纯流量口径在"国库与收入量纲脱节"时会失灵：lastIncome ≈ 70
+                // 时预算恒为 300 cr/季，帝国坐拥 6,000 万也几乎不采购。
+                // 因此再按国库存量给 0.5%/季 的补充额度（有上限，不会抽干国库）。
                 Fixed base = actor.lastIncome.rawValue() > 0 ? actor.lastIncome : Fixed(0);
                 Fixed budget = base * Fixed::pct(50);
+                Fixed stockBudget = actor.treasury * Fixed::pct(1) / Fixed(2);
+                budget = fxMax(budget, stockBudget);
                 // 保底：收入尚未统计出来时（开局）给一个很小的额度
                 if (budget.rawValue() < Fixed(300).rawValue()) budget = Fixed(300);
                 // 不超过国库本身
@@ -500,9 +506,22 @@ void marketMakerRequote(GameState& st) {
             static constexpr i64 kLiqNum[kExchangeCount] = {10, 6, 3};
             static constexpr i64 kLiqDen = 10;
             i64 baseQty = std::max<i64>(2, mulDivSat(typical / 40, kLiqNum[e], kLiqDen));
+            // ---- 做市商库存上限 ⇒ 停止报价买盘 ----
+            //
+            // 这是修复「市场凭空印钱」的关键。
+            // 做市商是合成主体（owner = kNoEmpire），`settleSpotFill` 对它直接 return，
+            // 也就是它的买单**没有资金账户**：任何帝国把库存卖给它都会凭空得到现金。
+            // 旧实现里做市商还会以公允价值**无限量**买入，于是它成了库存的无底沉淀池 ——
+            // 实测 11 个 AI 在 154 季里通过市场净收 2.1 亿 cr（约 136 万 cr/季），
+            // 而它们同期的 economyPhase 净收入只有 40~330 cr/季。
+            //
+            // 现在：库存达到上限即不再提供买盘。想做市商继续买，必须先有真实买盘
+            // 把它的库存买走（或季度回归消耗掉）。这同时给了「抛售压力」真实的定价后果。
+            const bool canBid = mm.inventory.rawValue() < (mm.inventoryLimit * 3);
             for (int i = 0; i < levels; ++i) {
                 for (int side = 0; side < 2; ++side) {
                     bool isBid = (side == 0);
+                    if (isBid && !canBid) continue;   // 库存已满：只报卖盘
                     Order o;
                     o.id = m.nextOrderId++;
                     o.seq = static_cast<u32>(m.nextSeq++);
@@ -538,6 +557,8 @@ void marketMakerRequote(GameState& st) {
                     bool isBid = (side == 0);
                     if (isBid && !b.bids.empty()) continue;
                     if (!isBid && !b.asks.empty()) continue;
+                    // 库存已满时连兜底买盘也不提供 —— 否则「停止买入」会被这里绕过
+                    if (isBid && !canBid) continue;
                     Order o;
                     o.id = m.nextOrderId++;
                     o.seq = static_cast<u32>(m.nextSeq++);

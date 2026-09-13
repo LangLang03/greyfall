@@ -297,11 +297,23 @@ void plotPhase(GameState& st) {
     }
 
     // 2) 幕次推进
+    //
+    // 推进口径 = max(已提交, 已解锁)。
+    // 旧口径只数「玩家用 deduce --commit 主动提交的结论」，于是 7 幕剧情
+    // 完全取决于玩家是否知道那个命令 —— 实测 154 季仍停在第 1 幕，
+    // 且游戏内**没有任何提示**告诉玩家这一点。
+    // 现在：线索凑齐后结论会自动解锁（见上一步），解锁数同样计入推进。
+    // 主动提交仍有独立价值（`--commit` 会立刻引发市场冲击与信誉变化，
+    // 并且是触发剧情结局与「误判」分支的唯一途径），但不再是主线前进的独木桥。
     const ActInfo& act = actInfo(static_cast<int>(st.plot.act));
     int committed = 0;
     for (u16 c : st.plot.committedConclusions)
         if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++committed;
-    if (committed >= act.requiredConclusions && st.plot.act < kActCount) {
+    int reached = 0;
+    for (u16 c : st.plot.conclusionsReached)
+        if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++reached;
+    const int progress = std::max(committed, reached);
+    if (progress >= act.requiredConclusions && st.plot.act < kActCount) {
         ++st.plot.act;
         st.act = st.plot.act;
         st.logEvent(LogPhase::Plot, kLogAct,
@@ -617,7 +629,19 @@ std::string epochReport(const GameState& st) {
         out += "\n" + style("结局：" + std::string(en.nameZh), Style::Heading) + "\n";
         out += wrapJoin(en.text, 86, "  ") + "\n";
     } else {
-        out += "\n（结局尚未达成：提交至少 40 个结论，或推进到 tick 200）\n";
+        // 这里曾经写「或推进到 tick 200」—— 全代码库**不存在任何按 tick 的结局判定**，
+        // 那句提示是假的（实测推到 245 季仍无结局），与 TUTORIAL.md 也互相矛盾。
+        // 现在给出真实的缺口。
+        const ActInfo& act = actInfo(static_cast<int>(st.plot.act));
+        int progress = 0;
+        for (u16 c : st.plot.conclusionsReached)
+            if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++progress;
+        for (u16 c : st.plot.committedConclusions)
+            if (conclusionDef(static_cast<int>(c)).act == st.plot.act) ++progress;
+        out += "\n（结局尚未达成：本幕第 " + std::to_string(static_cast<int>(st.plot.act)) + " 幕需 " +
+               std::to_string(act.requiredConclusions) + " 项结论，已完成 " +
+               std::to_string(std::min(progress, act.requiredConclusions)) +
+               " 项；线索凑齐后会自动解锁并推进，也可用 `deduce --commit` 主动提交）\n";
     }
     out += "\n已提交结论：" + std::to_string(st.plot.committedConclusions.size()) + "    误判：" +
            std::to_string(st.plot.falseConclusions.size()) + "    已发现线索：" +

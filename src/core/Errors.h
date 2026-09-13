@@ -33,7 +33,7 @@ private:
 
 [[noreturn]] inline void fail(ExitCode code, std::string msg) { throw GameError(code, std::move(msg)); }
 
-inline constexpr int kSchemaVersion = 5;
+inline constexpr int kSchemaVersion = 6;
 inline constexpr int kFormatMajor = 1;
 inline constexpr int kFormatMinor = 0;
 

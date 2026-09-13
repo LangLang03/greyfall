@@ -168,7 +168,11 @@ void cluePhase(GameState& st, TickReport& rep) {
     // 1) 衰减
     for (auto& n : st.clues) {
         if (!n.known) continue;
-        Fixed decay = memoryHole ? Fixed::raw(20) : Fixed::raw(10);
+        // 衰减速率决定「一条线索的有效窗口」。旧值 1%/季配合 30% 的可提交门槛
+        // 只给玩家约 40 季窗口，而线索本身要靠间谍/异常/传播慢慢积累 ——
+        // 结果是「线索在凑齐最小充分集之前就全部失效」。
+        // 降到 0.4%/季把窗口扩到约 100 季，与「一局几百季」的节奏对齐。
+        Fixed decay = memoryHole ? Fixed::raw(8) : Fixed::raw(4);
         n.credibility = fxClamp(n.credibility - decay, Fixed(0), Fixed(1));
         if (n.credibility.rawValue() < Fixed::pct(5).rawValue()) {
             // 可信度过低 ⇒ 变成"可疑"，仍保留但降权
@@ -176,16 +180,19 @@ void cluePhase(GameState& st, TickReport& rep) {
         }
     }
     // 2) 传播：通过超边把可信度扩散到相邻节点
+    //
+    // 阈值必须低于「起手线索可信度 × 静态印证边权重」，否则传播是死代码：
+    // 起手 0.70 × 权重 0.55 = 0.385，旧阈值 0.50 永远达不到（实测 200 季 0 次传播）。
     std::vector<std::pair<u16, Fixed>> gains;
     for (const auto& e : st.clueEdges) {
         if (e.kind != ClueEdgeKind::Corroborate) continue;
         if (e.a >= st.clues.size() || e.b >= st.clues.size()) continue;
         if (st.clues[e.a].known && !st.clues[e.b].known) {
             Fixed strength = clueCredibility(st, e.a) * e.weight;
-            if (strength.rawValue() > Fixed::pct(50).rawValue()) gains.emplace_back(e.b, strength);
+            if (strength.rawValue() > Fixed::pct(25).rawValue()) gains.emplace_back(e.b, strength);
         } else if (st.clues[e.b].known && !st.clues[e.a].known) {
             Fixed strength = clueCredibility(st, e.b) * e.weight;
-            if (strength.rawValue() > Fixed::pct(50).rawValue()) gains.emplace_back(e.a, strength);
+            if (strength.rawValue() > Fixed::pct(25).rawValue()) gains.emplace_back(e.a, strength);
         }
     }
     for (const auto& g : gains) {
@@ -305,16 +312,27 @@ bool conclusionUnlockable(const GameState& st, u16 conclusion, std::string* why)
         return false;
     }
     const ConclusionDef& def = conclusionDef(static_cast<int>(conclusion));
+    // 来源多样性的目标值必须与「最小充分集实际能有多大」对齐。
+    //
+    // 旧实现硬性要求 `channelDiversity >= 3`，而最小充分集是「每个子句恰好选 1 条」，
+    // 于是 2 子句的结论（84 个里的 42 个）**最小集恒为 2 个节点**，
+    // 多样性上限就是 2 —— 这 42 个结论在数学上永远无法提交。
+    // 这是「不存在有限步通关路径」的主因之一。
+    // 现在目标值取 `min(3, 集合大小)`：既保留「多渠道印证」的语义，
+    // 又不会对不可能达到的集合提出要求。
     for (const auto& ms : sets) {
-        if (def.requireDiversity && !ms.diverse) continue;
         if (!ms.noUnresolved) continue;
         if (def.requireInsider && !ms.hasInsider) continue;
+        if (def.requireDiversity) {
+            const int need = static_cast<int>(std::min<std::size_t>(3, ms.nodes.size()));
+            if (channelDiversity(ms.nodes, st) < need) continue;
+        }
         return true;
     }
     if (why) {
-        *why = "存在候选集但未通过附加约束（需来源多样性 ≥3";
-        if (def.requireInsider) *why += "、至少 1 条来自对手内部";
-        *why += "、无未裁定矛盾）";
+        *why = "存在候选集但未通过附加约束（来源多样性、";
+        if (def.requireInsider) *why += "至少 1 条来自对手内部、";
+        *why += "无未裁定矛盾）";
     }
     return false;
 }

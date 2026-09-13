@@ -701,7 +701,8 @@ void visitEmpire(Ar& a, Empire& e) {
     a(e.federation);
     visitArr(a, e.opinion);
     a(e.lastWarTick);
-    a(e.lastInvadeTick);
+    // v6 新增：入侵冷却的时间戳
+    if (a.schema >= 6) a(e.lastInvadeTick);
 
     visitMind(a, e.mind);
 
@@ -899,7 +900,8 @@ void visitRelation(Ar& a, Relation& r) {
     a(r.warScore);
     a(r.atWar);
     a(r.embargo);
-    a(r.warStartTick);
+    // v6 新增：战争起始 tick（0 = 未开战）。旧档读入后由 declareWar 重新记录。
+    if (a.schema >= 6) a(r.warStartTick);
 }
 
 template <typename Ar>
@@ -1252,11 +1254,19 @@ void visitGameState(Ar& a, GameState& st) {
     a(st.endless);
     a(st.ended);
     a(st.endingId);
+    // v6 新增：败亡状态。旧档读入后为「未败亡」，由 victoryPhase 重新判定。
+    // 注意：所有**新增字段都必须做 schema 门控** —— 无条件读会让旧档在
+    // 读到不存在的字节后整体反序列化失败（这正是 tests/data/*.bin 报错的原因）。
+    if (a.schema >= 6) {
+        a(st.defeated);
+        a.str(st.defeatReason);
+    }
     a(st.act);
     if (a.schema >= 4) {
         a(st.victory.consecutiveQuarters);
         a(st.victory.lastEvaluatedTick);
         a(st.victory.achieved);
+        if (a.schema >= 6) a(st.victory.consecutiveBankrupt);
     }
     a(st.modifierBits);
     a.str(st.modifierName);

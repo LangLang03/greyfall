@@ -301,11 +301,15 @@ TEST(market, arbitrage_is_self_limiting) {
     Fixed totalArb = Fixed(0);
     for (const auto& p : arbProfit) totalArb += p;
     CHECK(totalArb.rawValue() < startCash.rawValue() / 2);
-    // 3) 全程市场必须保持双边可交易，不能被打成一潭死水
+    // 3) 卖盘必须始终存在（买家永远能成交）。
+    //    买盘在做市商库存封顶时**允许为空** —— 这是「市场不再无限吸收库存」
+    //    的刻意设计：库存满了就停止报买盘，否则合成买方会用不存在的资金
+    //    无限量买走真实帝国的库存并凭空付钱（实测 154 季铸币 2.1 亿 cr）。
+    //    但两边同时为空仍是缺陷（市场彻底停摆）。
     for (int e = 0; e < kExchangeCount; ++e) {
         const Book& b = st.market.exchanges[static_cast<std::size_t>(e)].books[static_cast<std::size_t>(c)];
-        CHECK(!b.bids.empty());
         CHECK(!b.asks.empty());
+        CHECK(!b.bids.empty() || !b.asks.empty());
     }
     // 4) 账本不允许交叉（买一 ≥ 卖一）
     for (int e = 0; e < kExchangeCount; ++e) {

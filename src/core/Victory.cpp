@@ -109,29 +109,125 @@ VictoryStatus checkVictory(const GameState& st) {
 void victoryPhase(GameState& st) {
     auto& progress = st.victory;
     if (progress.achieved || st.tick == 0 || progress.lastEvaluatedTick == st.tick) return;
+    // 连续性必须在覆盖 lastEvaluatedTick **之前**判断：
+    // 先赋值会让 `st.tick != lastEvaluatedTick + 1` 恒为真，连续季数永远归零。
+    const bool consecutive = (st.tick == progress.lastEvaluatedTick + 1);
+    progress.lastEvaluatedTick = st.tick;
+
+    // ---- 破产计时 ----
+    // 必须每季都推进，不能被任何提前 return 跳过，否则"连续破产 8 季"
+    // 会因为其他分支的短路而永远数不满。
+    // 判定条件是**深度**为负（-50,000 cr 以下），正常的季度波动不会触发。
+    {
+        constexpr i64 kBankruptFloor = -50000;
+        const Empire* pl = st.empire(kPlayerId);
+        if (pl != nullptr && pl->treasury.rawValue() < Fixed(kBankruptFloor).rawValue())
+            ++progress.consecutiveBankrupt;
+        else
+            progress.consecutiveBankrupt = 0;
+    }
+
+    // ---- 胜利判定优先于失败判定 ----
+    // 满足治理条件就是胜利：一个已经达成全部治理目标的帝国，
+    // 即便在领土上被蚕食殆尽，也已经赢下了这一局（测试
+    // `mature_peaceful_economy_can_sustain_harder_governance` 明确要求这一点）。
+    // 反过来的优先级会让"最后一季刚好同时满足胜利与失败"永远判负。
     VictoryStatus v = checkVictory(st);
     const u32 previous = progress.consecutiveQuarters;
-    if (st.tick != progress.lastEvaluatedTick + 1) progress.consecutiveQuarters = 0;
-    progress.lastEvaluatedTick = st.tick;
-    if (!v.currentCriteriaMet) {
+    if (!consecutive) progress.consecutiveQuarters = 0;
+    if (v.currentCriteriaMet) {
+        ++progress.consecutiveQuarters;
+        if (progress.consecutiveQuarters == 1)
+            st.logEvent(LogPhase::Plot, "victory.started",
+                        "征服与治理条件达标，开始连续 " + std::to_string(v.rules.requiredQuarters) +
+                            " 季的治理考验", kPlayerId);
+        if (progress.consecutiveQuarters >= v.rules.requiredQuarters) {
+            progress.achieved = true;
+            st.endingId = 12;
+            st.ended = !st.endless;
+            st.logEvent(LogPhase::Plot, kLogEnding,
+                        "【征服胜利】所有对手均已被击败，民心、派系、财政、物资储备与国内秩序连续 " +
+                            std::to_string(v.rules.requiredQuarters) + " 季达标", kPlayerId);
+            return;
+        }
+    } else {
         progress.consecutiveQuarters = 0;
         if (previous > 0)
             st.logEvent(LogPhase::Plot, "victory.interrupted",
                         "治理考验中断，连续季数归零：" + v.unmet.front(), kPlayerId);
-        return;
     }
-    ++progress.consecutiveQuarters;
-    if (progress.consecutiveQuarters == 1)
-        st.logEvent(LogPhase::Plot, "victory.started",
-                    "征服与治理条件达标，开始连续 " + std::to_string(v.rules.requiredQuarters) +
-                        " 季的治理考验", kPlayerId);
-    if (progress.consecutiveQuarters < v.rules.requiredQuarters) return;
-    progress.achieved = true;
-    st.endingId = 12;
-    st.ended = !st.endless;
-    st.logEvent(LogPhase::Plot, kLogEnding,
-                "【征服胜利】所有对手均已被击败，民心、派系、财政、物资储备与国内秩序连续 " +
-                    std::to_string(v.rules.requiredQuarters) + " 季达标", kPlayerId);
+
+    // ---- 失败判定 ----
+    // 放在最后：只有在没有达成胜利时才可能判负。
+    const DefeatStatus d = checkDefeat(st);
+    if (d.defeated) {
+        st.ended = !st.endless;
+        st.defeated = true;
+        st.defeatReason = d.reason;
+        st.logEvent(LogPhase::Plot, kLogEnding, "【败亡】" + d.reason, kPlayerId);
+    }
+}
+
+DefeatStatus checkDefeat(const GameState& st) {
+    DefeatStatus d;
+    const Empire* player = st.empire(kPlayerId);
+    if (player == nullptr) {
+        d.kind = DefeatKind::Conquered;
+        d.defeated = true;
+        d.reason = "你的帝国已不复存在。";
+        return d;
+    }
+    if (st.defeated) {
+        // 已经判负过：保持结论（--endless 可继续观望，但状态不再翻转）
+        d.kind = DefeatKind::Conquered;
+        d.defeated = true;
+        d.reason = st.defeatReason.empty() ? "你的帝国已覆灭。" : st.defeatReason;
+        return d;
+    }
+    if (!player->alive) {
+        d.kind = DefeatKind::Conquered;
+        d.defeated = true;
+        d.reason = "你的帝国已覆灭。";
+        return d;
+    }
+    // 领土归零 = 被征服。这是旧版本最严重的行为缺口：
+    // 玩家在 154 季后 0 星系 / 0 行星，游戏却继续正常运行、不判负、不结束。
+    const bool hasSystem = std::any_of(st.map.systems.begin(), st.map.systems.end(),
+                                      [](const SystemNode& s) { return s.owner == kPlayerId; });
+    const bool hasPlanet = std::any_of(st.planets.begin(), st.planets.end(),
+                                       [](const Planet& p) { return p.owner == kPlayerId; });
+    if (!hasSystem && !hasPlanet) {
+        d.kind = DefeatKind::Conquered;
+        d.defeated = true;
+        d.reason = "你失去了最后一个星系与行星，帝国被彻底征服。";
+        return d;
+    }
+    // 连续破产：国库深度为负且持续 8 季。给足缓冲，避免正常波动误判。
+    constexpr u32 kBankruptQuarters = 8;
+    constexpr i64 kBankruptFloor = -50000;
+    if (player->treasury.rawValue() < Fixed(kBankruptFloor).rawValue() &&
+        st.victory.consecutiveBankrupt + 1 >= kBankruptQuarters) {
+        d.kind = DefeatKind::Bankrupt;
+        d.defeated = true;
+        d.reason = "连续 " + std::to_string(kBankruptQuarters) + " 季国库低于 " +
+                   std::to_string(kBankruptFloor) + " cr，财政崩溃导致帝国解体。";
+        return d;
+    }
+    if (player->treasury.rawValue() < Fixed(kBankruptFloor).rawValue()) d.kind = DefeatKind::Bankrupt;
+    return d;
+}
+
+std::string defeatText(const GameState& st) {
+    DefeatStatus d = checkDefeat(st);
+    if (!d.defeated && d.kind == DefeatKind::None) return {};
+    std::string out = style("═══ 败亡 ═══", Style::Heading) + "\n";
+    out += "  " + (st.defeatReason.empty() ? d.reason : st.defeatReason) + "\n";
+    if (!st.endless)
+        out += "  纪元在此终结。用 `greyfall new` 开启新纪元，"
+               "或 `greyfall epoch --next` 以遗产续行。\n";
+    else
+        out += "  （无尽模式：你可以继续观望这个世界的走向。）\n";
+    return out;
 }
 
 std::string victoryReport(const GameState& st) {

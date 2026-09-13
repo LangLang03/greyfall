@@ -13,6 +13,7 @@ constexpr Step kSteps[] = {
     {2, 3, "v3：抉择类型与延期、保险保单、期货归属与到期日"},
     {3, 4, "v4：连续治理季数与征服胜利记录"},
     {4, 5, "v5：殖民与国家工程、殖民发展期、限期法令与飞升记录"},
+    {5, 6, "v6：战争起始 tick 与入侵冷却（旧档按未开战/无冷却处理）"},
 };
 constexpr std::size_t kStepCount = sizeof(kSteps) / sizeof(kSteps[0]);
 

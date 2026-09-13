@@ -74,6 +74,10 @@ struct GameState {
     bool endless = false;
     bool ended = false;
     u8 endingId = 0;
+    /// 玩家是否已败亡（与 `ended` 区分：`ended` 表示"本纪元结束"，
+    /// 胜利用 endingId=12，失败用 defeated=true 且无结局编号）。
+    bool defeated = false;
+    std::string defeatReason;
     u8 act = 1;
     VictoryProgress victory;
     /// 全局词缀：位掩码（见 gen/ModifierGen.h）
