@@ -701,6 +701,7 @@ void visitEmpire(Ar& a, Empire& e) {
     a(e.federation);
     visitArr(a, e.opinion);
     a(e.lastWarTick);
+    a(e.lastInvadeTick);
 
     visitMind(a, e.mind);
 
@@ -898,6 +899,7 @@ void visitRelation(Ar& a, Relation& r) {
     a(r.warScore);
     a(r.atWar);
     a(r.embargo);
+    a(r.warStartTick);
 }
 
 template <typename Ar>

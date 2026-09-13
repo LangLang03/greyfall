@@ -249,7 +249,9 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
         case AiActionKind::DiploOffer: {
             Relation& rel = st.relation(a.target, actor);
             rel.opinion = fxClamp(rel.opinion + Fixed::pct(6), Fixed(-1), Fixed(1));
-            e->opinion[a.target] = rel.opinion;
+            // a.target 来自 AI 候选动作，必须自证合法：越界写入会破坏相邻内存
+            //（Empire.h 里记录过一次实例：国库被写成垃圾值）。
+            if (a.target < kMaxEmpires) e->opinion[a.target] = rel.opinion;
             Treaty t;
             t.kind = TreatyKind::TradePact;
             t.a = actor;
@@ -292,7 +294,16 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
             // 关系恶化
             Relation& rel = st.relation(kPlayerId, actor);
             rel.opinion = fxClamp(rel.opinion - Fixed::pct(60), Fixed(-1), Fixed(1));
-            declareWar(st, actor, kPlayerId, st.rng.chance(RngStream::Ai, Fixed::pct(45)));
+            // 背约有 45% 概率升级为公开战争。
+            //
+            // 这里**必须**只在 roll 成功时调用 declareWar(true)：
+            // 旧写法 `declareWar(st, actor, kPlayerId, st.rng.chance(...))` 把
+            // 「不升级为战争」表达成了 `declareWar(false)`，而 `false` 的语义是
+            // **停战** —— 于是 45% 的分支会静默终止一场正在进行的战争，
+            // 并清零双方战争分数与 warStartTick。后果：战争永远攒不到和平
+            // 阈值、warStartTick 恒为 0（战争疲劳上限失效），玩家被无限期
+            // 拖在战争里。实测该缺陷使玩家在 200 季后仍被 2 场战争拖着。
+            if (st.rng.chance(RngStream::Ai, Fixed::pct(45))) declareWar(st, actor, kPlayerId, true);
             e->betrayalsCommitted += 1;
             p.betrayalsSuffered += 1;
             // 删除双方条约
@@ -344,17 +355,23 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
                 f->order = FleetOrder::Engage;
                 ++sent;
             }
-            st.logEvent(LogPhase::Combat, kLogWar,
-                        e->name + " 出兵 " + std::to_string(sent) + " 支舰队进攻 " +
-                            std::string(st.system(dest) ? st.system(dest)->name : "?"),
-                        actor);
             if (sent == 0) {
-                // 无可用舰队：回防休整
+                // 无可用舰队：本次入侵**不成立**，不写日志、不消耗行动、不设冷却。
+                // 原先这里仍然打印「出兵 0 支舰队进攻 X」，导致日志每 tick 刷屏，
+                // 玩家看到的是「敌人无限进攻」的假象。候选生成侧已加兵力闸门，
+                // 这里是第二道防线（状态可能在评估与执行之间变化）。
                 for (u32 fid : e->fleets) {
                     Fleet* f = st.fleet(fid);
                     if (f != nullptr && f->battle == 0xFFFFFFFFu) f->order = FleetOrder::Patrol;
                 }
+                break;
             }
+            // 记录真实入侵，启动冷却（见 ForwardSimulator 的 kInvadeCooldownQuarters）
+            e->lastInvadeTick = st.tick;
+            st.logEvent(LogPhase::Combat, kLogWar,
+                        e->name + " 出兵 " + std::to_string(sent) + " 支舰队进攻 " +
+                            std::string(st.system(dest) ? st.system(dest)->name : "?"),
+                        actor);
             break;
         }
         case AiActionKind::Colonize: {

@@ -90,7 +90,11 @@ int cmdPeace(CliEnv& env, const Args& args) {
     }
 
     if (args.has("tech")) {
-        int idx = resolutionIndexByName(args.get("tech"));
+        // 必须用科技表查科技。旧代码调用的是 resolutionIndexByName
+        //（决议表），当某条决议名恰好等于科技名时会返回错误索引 ——
+        // 这是一个确定性错误：`peace --tech <名称>` 可能索要一项
+        // 完全不相干的科技，或误报「未知科技」。
+        int idx = techIndexByName(args.get("tech"));
         // 也允许直接给科技编号
         i64 n = parseInt(args.get("tech"), -1);
         if (n >= 0 && n < kTechCount) idx = static_cast<int>(n);

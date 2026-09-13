@@ -149,11 +149,21 @@ void completeProject(GameState& st, Empire& e, const DevelopmentProject& p) {
             st.starbases.push_back(b);
         }
     } else if (p.kind == ProjectKind::Ascension) {
-        e.ascensions |= 1u << p.definition;
-        if (e.isPlayer) {
-            const int dimensions[] = {5, 4, 3, 6, 7};
-            st.plot.endingVector[dimensions[p.definition]] += Fixed(p.definition == 4 ? 3 : 1);
-            if (p.definition == 4) st.plot.hiddenActUnlocked = true;
+        // 飞升路径数必须与「结局维度映射表」严格对齐。
+        // 旧实现在这里直接 `dimensions[p.definition]`，而 p.definition 是 u32：
+        // 合法性只在创建侧（ProjectStarts）与加载侧（Serde）校验过，
+        // **消费者本身没有任何保护**。任何新的写入方漏检就是栈越界读，
+        // 再用垃圾值索引 8 元素 endingVector → 越界写。
+        static constexpr int kAscensionDimensions[] = {5, 4, 3, 6, 7};
+        constexpr u32 kAscensionPaths = sizeof(kAscensionDimensions) / sizeof(kAscensionDimensions[0]);
+        if (p.definition >= kAscensionPaths) {
+            // 非法路径：不授予飞升、不写结局向量（而不是越界读写）
+        } else {
+            e.ascensions |= 1u << p.definition;
+            if (e.isPlayer) {
+                st.plot.endingVector[kAscensionDimensions[p.definition]] += Fixed(p.definition == 4 ? 3 : 1);
+                if (p.definition == 4) st.plot.hiddenActUnlocked = true;
+            }
         }
     } else if (p.kind == ProjectKind::Recruitment) {
         for (u32 id : p.fleets) {

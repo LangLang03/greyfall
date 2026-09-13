@@ -101,6 +101,11 @@ struct Empire {
         if (who < kMaxEmpires) opinion[who] = fxClamp(opinion[who] + delta, Fixed(-1), Fixed(1));
     }
     u32 lastWarTick = 0;
+    /// 上一次真正投入兵力的入侵 tick。
+    /// 用于「入侵冷却」：没有它，AI 只要处于战争状态就会**每 tick** 重复生成
+    /// 入侵候选并重复出兵同一星系（实测 t=17→t=52 连续 36 季刷屏，
+    /// 其中多数是「出兵 0 支舰队」的空打），战争因此变成无意义的磨盘。
+    u64 lastInvadeTick = 0;
     /// 正当战争理由（casus belli）：没有它宣战会有严重政治代价
     std::vector<CasusBelli> casusBelli;
     /// 战争疲劳（按对手分别累计）

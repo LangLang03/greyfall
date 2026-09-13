@@ -123,6 +123,18 @@ struct GameState {
     // ---- AI 观测缓存（派生数据，不入档；每个状态各一份以保证 replay 可复现）----
     ReaderCache reader;
 
+    /// 越界关系的**接收槽**。
+    ///
+    /// `relation(a,b)` 需要一个可写引用，但越界时无处可写。旧实现用
+    /// `static Relation dummy` 兜底 —— 那是进程级共享的可变对象：
+    ///   · 两个 GameState 会互相污染
+    ///   · 单元测试并行/交替运行时结果互相影响
+    ///   · 写入被静默丢弃（`ai/AiCore.cpp` 的 `rel.opinion = …` 实际写进了垃圾对象）
+    /// 改为每个 GameState 实例自带一份，至少消除跨实例污染；
+    /// 静默丢弃的语义仍保留（调用方多，一次性改成指针返回值风险过高），
+    /// 但**越界本身应当被断言捕获**（见 `relationChecked`）。
+    Relation scratchRelation{};
+
     // ---- 存档博弈 ----
     u32 rollbackCount = 0;
     u64 chronicleHead = 0;
@@ -178,16 +190,21 @@ struct GameState {
     [[nodiscard]] const SystemNode* system(u32 id) const { return map.find(id); }
 
     [[nodiscard]] Relation& relation(u32 a, u32 b) {
-        static Relation dummy;
         std::size_t idx = static_cast<std::size_t>(a) * kMaxEmpires + b;
-        if (idx >= relations.size()) return dummy;
+        if (a >= kMaxEmpires || b >= kMaxEmpires || idx >= relations.size()) return scratchRelation;
         return relations[idx];
     }
     [[nodiscard]] const Relation& relation(u32 a, u32 b) const {
-        static const Relation dummy{};
         std::size_t idx = static_cast<std::size_t>(a) * kMaxEmpires + b;
-        if (idx >= relations.size()) return dummy;
+        if (a >= kMaxEmpires || b >= kMaxEmpires || idx >= relations.size()) return scratchRelation;
         return relations[idx];
+    }
+    /// 越界时返回 nullptr 的严格版本。新代码应优先使用它 ——
+    /// 调用方无法再"静默写进垃圾对象"，必须显式处理失败。
+    [[nodiscard]] Relation* relationChecked(u32 a, u32 b) {
+        std::size_t idx = static_cast<std::size_t>(a) * kMaxEmpires + b;
+        if (a >= kMaxEmpires || b >= kMaxEmpires || idx >= relations.size()) return nullptr;
+        return &relations[idx];
     }
     void initRelations();
 

@@ -222,7 +222,18 @@ std::vector<u8> techTickProject(TechState& st, Fixed funding, const std::vector<
         return done;
     }
     const TechInfo& t = techInfo(idx);
-    (void)completedList;
+    // 去重：已完成的科技不得再次进入 completed。
+    // 旧实现完全忽略 completedList 参数（`(void)completedList;`），
+    // 在 :255 无条件 push_back —— 任何绕过 techAdvance 的推进路径
+    // 都会让 st.completed 出现重复条目，污染 branchCount 与存档校验。
+    // 姊妹函数 techAdvance 在 :145 一直有这道检查，这里补齐。
+    for (u8 c : completedList)
+        if (static_cast<int>(c) == idx) {
+            st.project = TechState::kNoTech;
+            st.projectProgress = Fixed(0);
+            st.projectTicks = 0;
+            return done;
+        }
     const Fixed costFixed = Fixed(static_cast<i64>(t.cost));
 
     // 资金 → 研究点：40 cr 换 1 点。

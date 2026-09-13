@@ -222,21 +222,24 @@ TEST(construction, corruption_grows_with_scale_and_government) {
 
 TEST(construction, corruption_is_bounded_and_purgeable) {
     GameState st = conWorld(7706);
-    Empire& me = st.empires[kPlayerId];
-    me.government = 16;   // 资本主义
+    // 注意：GameState 的 empires 是 std::vector，`generation`/tick 阶段可能让它扩容。
+    // 这里曾经把 `Empire& me` 一直持有到 conTicks 之后 —— 那是**悬垂引用**，
+    // 写 me.treasury 实际写进了已释放的内存，断言随机通过/失败。
+    // 必须先设政体、跑完 tick，再重新取引用。
+    st.empires[kPlayerId].government = 16;   // 资本主义
     conTicks(st, 80);
     Fixed before = corruptionOf(st, kPlayerId);
     if (before.rawValue() <= 0) return;
     // 腐败侵蚀收入：必须为非负且不超过 100%
     CHECK(corruptionIncomeLoss(st, kPlayerId).rawValue() >= 0);
     CHECK(corruptionIncomeLoss(st, kPlayerId).rawValue() <= Fixed(1).rawValue());
-    // 反腐
-    me.treasury = Fixed(500000);
+    // 反腐（此处重新取引用，见上）
+    st.empires[kPlayerId].treasury = Fixed(500000);
     std::string msg;
     CHECK(antiCorruption(st, kPlayerId, &msg));
     CHECK(corruptionOf(st, kPlayerId).rawValue() < before.rawValue());
     // 国库不足时失败
-    me.treasury = Fixed(0);
+    st.empires[kPlayerId].treasury = Fixed(0);
     CHECK(!antiCorruption(st, kPlayerId, &msg));
 }
 

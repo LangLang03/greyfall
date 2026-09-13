@@ -4,3 +4,7 @@ build/
 .gfbench/
 *.gsv
 *.gfc
+build-*/
+build-san/
+compile_commands.json
+*.tmp

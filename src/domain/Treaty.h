@@ -46,6 +46,10 @@ struct Relation {
     u32 warScore = 0;
     bool atWar = false;
     bool embargo = false;
+    /// 当前这场战争开始的 tick（0 = 未处于战争）。
+    /// 用于「战争必然收敛」：久拖不决的战争会被强制送进和平会议，
+    /// 否则弱势一方会在毫无出路的情况下被无限期磨死。
+    u64 warStartTick = 0;
 };
 
 [[nodiscard]] std::string_view treatyKindName(TreatyKind k);

@@ -62,6 +62,25 @@ Fixed simulateExecution(const Projection& p, u8 res, i64 qty, bool buy, Fixed* s
     return buy ? (ref + ref * impact) : (ref - ref * impact);
 }
 
+/// 该帝国是否存在「可投入进攻」的舰队。
+///
+/// 判据与 `AiCore` 的 Invade 执行保持一致：舰队存在、不在交战中、
+/// 组织度不低于上限的一半（组织度不足的舰队留在后方休整）。
+/// 用它作为生成候选的前置条件，可以避免「出兵 0 支舰队」这种空动作
+/// 占掉候选位并污染日志。
+[[nodiscard]] bool hasInvasionForce(const GameState& st, u32 empire) {
+    const Empire* e = st.empire(empire);
+    if (e == nullptr) return false;
+    for (u32 fid : e->fleets) {
+        const Fleet* f = st.fleet(fid);
+        if (f == nullptr) continue;
+        if (f->battle != 0xFFFFFFFFu) continue;
+        if (f->org.rawValue() < f->maxOrg.rawValue() / 2) continue;
+        return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::string_view aiActionName(AiActionKind k) {
@@ -384,6 +403,15 @@ std::vector<AiAction> generateCandidates(const GameState& st, u32 actor, const I
     }
 
     // 4.5) 出兵入侵：只要处于战争状态，就评估是否进攻敌方星系
+    //
+    // 两道闸门（否则战争退化为无意义的每季重复刷屏）：
+    //   ① 入侵冷却：一次真实入侵后 6 季内不再生成候选
+    //   ② 兵力可行性：没有任何「可投入的舰队」时不生成候选 ——
+    //      原先无舰队也会生成，`AiCore` 于是每 tick 打印
+    //      「出兵 0 支舰队进攻 X」，并且白白占掉一个候选位。
+    constexpr u64 kInvadeCooldownQuarters = 6;
+    const bool invadeReady = st.tick >= e->lastInvadeTick + kInvadeCooldownQuarters;
+    if (invadeReady && hasInvasionForce(st, actor)) {
     for (const auto& other : st.empires) {
         if (other.id == actor || !other.alive) continue;
         if (!atWarWith(st, actor, other.id)) continue;
@@ -418,6 +446,7 @@ std::vector<AiAction> generateCandidates(const GameState& st, u32 actor, const I
                  std::string(st.system(target) ? st.system(target)->name : "?");
         out.push_back(std::move(a));
         break;
+    }
     }
 
     // 5) 常规发展

@@ -16,6 +16,47 @@ namespace {
 /// 战争分数的「有限胜利」门槛：达到即可召开和平会议
 constexpr i64 kPeaceScoreThreshold = 3;
 
+/// 战争疲劳上限（季）。任何战争拖过这个长度都会被强制送进和平会议。
+///
+/// 为什么必须有这条：原先 `shouldConvenePeace` 只看战争分数与首都失守 ——
+/// 当双方舰队互相僵持、谁也刷不到 3 分时，战争**永不结束**。实测玩家与
+/// 霜羽殖民地联盟从 t=17 打到 t=52，对方每季重复入侵同一星系，
+/// 战争疲劳飙到 71%，玩家必然被磨死且没有任何停战通道。
+/// 有了这条上限，任何战争的持续时间都有硬边界（≤ 20 季）。
+constexpr u64 kMaxWarQuarters = 20;
+
+/// 涉及玩家的和平会议在被自动清算前可挂起的季数。
+/// 玩家不回应时，和平按占优方的意志执行 —— 与 AI 之间的战争同口径。
+constexpr u64 kAutoConcludeQuarters = 8;
+
+/// 由占优方自动填写和平要求：优先割让价值最高的星系，其余分数换赔款。
+///
+/// 提取成函数是因为「AI 之间的战争」与「玩家久不回应的战争」必须走同一条路径 ——
+/// 旧实现只给前者写了这段逻辑，后者只能永远挂着。
+void autoFillDemands(GameState& st, u32 winner, u32 loser) {
+    PeaceConference* c = nullptr;
+    for (auto& x : st.peace)
+        if (x.active && x.winner == winner && x.loser == loser) c = &x;
+    if (c == nullptr) return;
+    const Empire* l = st.empire(loser);
+    if (l == nullptr) return;
+    std::vector<u32> cands = l->systems;
+    std::sort(cands.begin(), cands.end(), [&](u32 x, u32 y) {
+        return annexCost(st, x).rawValue() > annexCost(st, y).rawValue();
+    });
+    for (u32 sys : cands) {
+        PeaceDemand d = makeAnnex(st, sys);
+        if (d.cost.rawValue() > (c->warScore - c->spent).rawValue()) continue;
+        (void)addDemand(st, winner, d, nullptr);
+        if (c->spent.rawValue() >= c->warScore.rawValue() * 0.8) break;
+    }
+    Fixed left = c->warScore - c->spent;
+    if (left.rawValue() >= 1) {
+        PeaceDemand d = makeReparations(left * Fixed(1000));
+        (void)addDemand(st, winner, d, nullptr);
+    }
+}
+
 }  // namespace
 
 std::string_view peaceDemandName(PeaceDemandKind k) {
@@ -101,6 +142,13 @@ bool shouldConvenePeace(const GameState& st, u32 a, u32 b) {
     const Empire* eb = st.empire(b);
     if (ea != nullptr && st.system(ea->capital) != nullptr && st.system(ea->capital)->owner == b) return true;
     if (eb != nullptr && st.system(eb->capital) != nullptr && st.system(eb->capital)->owner == a) return true;
+    // 战争疲劳上限 ⇒ 无条件（保证任何战争都有终点）。
+    // warStartTick 存的是「开战 tick + 1」（0 保留给「未开战」），此处减回。
+    if (rel.warStartTick != 0 && st.tick >= rel.warStartTick - 1 + kMaxWarQuarters) return true;
+    if (rev.warStartTick != 0 && st.tick >= rev.warStartTick - 1 + kMaxWarQuarters) return true;
+    // 一方已被打到「无舰队且无星系」⇒ 立即清算，不必再拖
+    if (ea != nullptr && ea->alive && ea->fleets.empty() && ea->systems.empty()) return true;
+    if (eb != nullptr && eb->alive && eb->fleets.empty() && eb->systems.empty()) return true;
     return false;
 }
 
@@ -393,38 +441,34 @@ void peacePhase(GameState& st) {
             winner = b;
             loser = a;
         }
-        // 双方都是 AI 才自动结算；涉及玩家则等玩家在会议中决定
+        // 涉及玩家：等玩家在会议中决定，但**不能无限期等**。
+        //
+        // 旧实现只有 `convenePeace` 而没有期限，于是玩家不回应时会议永久 active。
+        // 实测后果：玩家与某国的会议在 t=26 建立后一直挂着，`peacePhase` 里的
+        // `findConference(st,a,b) == nullptr` 判定让**后续每一场战争都无法建立
+        // 新会议** ⇒ 所有战争重新变成无限期，玩家被战争疲劳磨到领土归零。
+        // 现在：会议超过 kAutoConcludeQuarters 季未被玩家推进，就按 AI 口径自动清算。
         if (ea->isPlayer || eb->isPlayer) {
-            if (findConference(st, a, b) == nullptr) {
+            PeaceConference* existing = nullptr;
+            for (auto& x : st.peace)
+                if (x.active && ((x.winner == a && x.loser == b) || (x.winner == b && x.loser == a)))
+                    existing = &x;
+            if (existing == nullptr) {
                 (void)convenePeace(st, winner, loser, nullptr);
+                continue;
             }
+            if (st.tick < existing->startTick + kAutoConcludeQuarters) continue;
+            // 玩家长时间不回应 ⇒ 按占优方的意志强制清算（和平是战争的终点，不是选项）
+            const u32 w = existing->winner;
+            const u32 l = existing->loser;
+            autoFillDemands(st, w, l);
+            (void)concludePeace(st, w, nullptr);
             continue;
         }
         if (findConference(st, a, b) == nullptr) {
             if (!convenePeace(st, winner, loser, nullptr)) continue;
         }
-        // 自动填要求：优先割让接壤且价值最高的星系，其余分数换赔款
-        PeaceConference* c = nullptr;
-        for (auto& x : st.peace)
-            if (x.active && x.winner == winner && x.loser == loser) c = &x;
-        if (c == nullptr) continue;
-        const Empire* l = st.empire(loser);
-        std::vector<u32> cands = l->systems;
-        std::sort(cands.begin(), cands.end(), [&](u32 x, u32 y) {
-            return annexCost(st, x).rawValue() > annexCost(st, y).rawValue();
-        });
-        for (u32 sys : cands) {
-            PeaceDemand d = makeAnnex(st, sys);
-            if (d.cost.rawValue() > (c->warScore - c->spent).rawValue()) continue;
-            (void)addDemand(st, winner, d, nullptr);
-            if (c->spent.rawValue() >= c->warScore.rawValue() * 0.8) break;
-        }
-        // 余下分数换成赔款
-        Fixed left = c->warScore - c->spent;
-        if (left.rawValue() >= 1) {
-            PeaceDemand d = makeReparations(left * Fixed(1000));
-            (void)addDemand(st, winner, d, nullptr);
-        }
+        autoFillDemands(st, winner, loser);
         (void)concludePeace(st, winner, nullptr);
     }
 }
