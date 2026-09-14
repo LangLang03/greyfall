@@ -60,4 +60,22 @@ struct ComputeBudget {
     return Fixed::pct(kNum[d - 1]);
 }
 
+/// 对玩家的宣战「缓冲期」系数：开局若干季内大幅降低宣战意愿。
+///
+/// 为什么需要它：实测（多种子、难度 1/3/5）**玩家平均在 21~44 季内失去
+/// 全部领土**，最快的只用 21 季 —— 玩家还在读规则、还没建起第一座建筑，
+/// 战争就已经结束了。设计文档把「AI 透视导致必输体验」列为头号风险，
+/// 对策是「强度参数化」，而缓冲期是这条对策里最关键的一环：
+/// 它不削弱 AI 的能力，只推迟它对玩家的敌意，让前期有一个可读、可学的
+/// 发展窗口，中后期压力完全不受影响。
+[[nodiscard]] inline Fixed aiGraceFactor(u64 tick, int difficulty) {
+    // 缓冲期长度随难度递减：难度 1 给 24 季，难度 5 只给 8 季。
+    const int d = difficulty < 1 ? 1 : (difficulty > 5 ? 5 : difficulty);
+    const u64 grace = static_cast<u64>(28 - 4 * d);
+    if (tick >= grace || grace == 0) return Fixed(1);
+    // 从 10% 线性升到 100%
+    const i64 num = 10 + static_cast<i64>(90 * tick / grace);
+    return Fixed::pct(num < 10 ? 10 : (num > 100 ? 100 : num));
+}
+
 }  // namespace gf

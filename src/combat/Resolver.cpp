@@ -161,6 +161,26 @@ Fixed systemDefense(const GameState& st, u32 system) {
         }
     }
     def = def * (Fixed(1) + Fixed::pct(20) + terrainDefenseBonus(st, system));
+    // ---- 本土防御加成 ----
+    //
+    // 防守方在自己的星系作战应当有实质优势，否则「被进攻」只是纯粹的战力比大小：
+    // 实测玩家（国力 448 / 3 星系 / 12 万 cr）在 35 季内被夺走全部领土，
+    // 全程没有任何可以据守的支点，战斗里也看不到「主场」这一维度。
+    //
+    // 幅度按难度缩放：低难度下本土更难被啃下，给新手真实的缓冲期；
+    // 高难度下加成收缩，AI 的侵略性得以完整体现。
+    // 首都额外加固 —— 首都失守会触发无条件和平会议，代价极高。
+    if (sys->owner != kNoEmpire) {
+        const Empire* owner = st.empire(sys->owner);
+        if (owner != nullptr) {
+            const int d = std::max(0, st.difficulty - 1);
+            Fixed home = owner->isPlayer ? (Fixed::pct(60) - Fixed(15) * Fixed(d))
+                                         : (Fixed::pct(25) - Fixed(8) * Fixed(d));
+            home = fxMax(home, Fixed(0));
+            const Fixed capital = (owner->capital == system) ? Fixed::pct(25) : Fixed(0);
+            def = def * (Fixed(1) + home + capital);
+        }
+    }
     if (sys->megastructure) {
         def += Fixed(400);
         if (sys->megastructureId < kMegastructureCount) {

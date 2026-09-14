@@ -203,6 +203,38 @@ void eventsPhase(GameState& st, TickReport& rep) {
 
 void resolveChoiceAuto(GameState& st, int optionIndex) {
     if (st.pending.empty()) return;
+    // 自动结算的选项必须**理性**，不能无脑选 0。
+    //
+    // 事件文本普遍把「代价：国库 -」放在第 0 项（公开处理/强硬回应），
+    // 无脑选 0 等于让基准测试（selftest / bots / 自动化试玩脚本）
+    // 持续替玩家做最贵的选择 —— 实测同一种子下「总是选 0」会让玩家在
+    // 21 季内被征服，而按代价择优则能长期存活。
+    // 基准测试若表现的是"最差玩家"，就无法用来判断游戏难度是否合理。
+    //
+    // 现状：优先选「明确不消耗国库」的选项；若全部要花钱，退而选
+    // 代价文本最轻的（拖延/观望类通常排最后）。
+    if (optionIndex < 0) {
+        const PendingChoice& c = st.pending.items.front();
+        int best = 0;
+        if (c.kind != ChoiceKind::Faction) {
+            int bestRank = -1;
+            for (std::size_t i = 0; i < c.options.size(); ++i) {
+                const std::string& opt = c.options[i];
+                int rank = 0;
+                const bool costly = opt.find("国库 -") != std::string::npos;
+                const bool cheap = opt.find("观感 -") != std::string::npos ||
+                                   opt.find("后续风险") != std::string::npos;
+                if (costly) rank = -2;
+                else if (cheap) rank = 1;
+                else rank = 0;
+                if (rank > bestRank) {
+                    bestRank = rank;
+                    best = static_cast<int>(i);
+                }
+            }
+        }
+        optionIndex = best;
+    }
     if (resolveChoice(st, 0, optionIndex, nullptr)) return;
     // 无力满足诉求时选择不花钱的拖延，避免无头模拟卡在同一事件。
     const int fallback = st.pending.items.front().kind == ChoiceKind::Faction ? 2 : 0;

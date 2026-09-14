@@ -336,6 +336,9 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
             // 避免 AI 反复向明显强于自己的对手宣战（那既不符合 AI 的
             // EV 最大化，也会把战争变成无意义的噪声）。
             Fixed willingness = aiWarWillingness(st.difficulty);
+            // 对玩家的敌意有前期缓冲（见 aiGraceFactor）：
+            // 不削弱 AI 的能力，只推迟它对玩家的宣战，给玩家一个可读的发展窗口。
+            if (a.target == kPlayerId) willingness = willingness * aiGraceFactor(st.tick, st.difficulty);
             if (a.target == kPlayerId) {
                 const Empire* foe = st.empire(a.target);
                 if (foe != nullptr) {
