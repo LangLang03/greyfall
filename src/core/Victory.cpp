@@ -162,9 +162,13 @@ void victoryPhase(GameState& st) {
     const DefeatStatus d = checkDefeat(st);
     if (d.defeated) {
         st.ended = !st.endless;
+        // 只在**首次**判负时记日志。旧写法每 tick 都会写一条
+        // 「【败亡】…」，日志被同一条消息刷屏（实测连续 4 季重复）。
+        if (!st.defeated) {
+            st.logEvent(LogPhase::Plot, kLogEnding, "【败亡】" + d.reason, kPlayerId);
+        }
         st.defeated = true;
         st.defeatReason = d.reason;
-        st.logEvent(LogPhase::Plot, kLogEnding, "【败亡】" + d.reason, kPlayerId);
     }
 }
 
@@ -203,17 +207,22 @@ DefeatStatus checkDefeat(const GameState& st) {
         return d;
     }
     // 连续破产：国库深度为负且持续 8 季。给足缓冲，避免正常波动误判。
+    //
+    // 阈值必须与**收入规模**挂钩：一个季度净收入只有 200 cr 的小国，
+    // 欠 5 万已经是 250 季的收入，等同于永久无法翻身；
+    // 而对大国来说 5 万只是周转波动。固定阈值对两者都不公平。
     constexpr u32 kBankruptQuarters = 8;
-    constexpr i64 kBankruptFloor = -50000;
-    if (player->treasury.rawValue() < Fixed(kBankruptFloor).rawValue() &&
+    const Fixed floorByIncome = Fixed(20000) + fxMax(player->lastIncome, Fixed(0)) * Fixed(15);
+    const Fixed bankruptFloor = fxMax(Fixed(50000), floorByIncome);
+    if (player->treasury.rawValue() < (-bankruptFloor).rawValue() &&
         st.victory.consecutiveBankrupt + 1 >= kBankruptQuarters) {
         d.kind = DefeatKind::Bankrupt;
         d.defeated = true;
-        d.reason = "连续 " + std::to_string(kBankruptQuarters) + " 季国库低于 " +
-                   std::to_string(kBankruptFloor) + " cr，财政崩溃导致帝国解体。";
+        d.reason = "连续 " + std::to_string(kBankruptQuarters) + " 季国库低于 -" +
+                   fixedStrPlain(bankruptFloor, 0) + " cr，财政崩溃导致帝国解体。";
         return d;
     }
-    if (player->treasury.rawValue() < Fixed(kBankruptFloor).rawValue()) d.kind = DefeatKind::Bankrupt;
+    if (player->treasury.rawValue() < (-bankruptFloor).rawValue()) d.kind = DefeatKind::Bankrupt;
     return d;
 }
 

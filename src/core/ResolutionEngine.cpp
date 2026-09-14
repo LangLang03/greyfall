@@ -98,10 +98,17 @@ void resolutionPhase(GameState& st, TickReport& rep) {
         if (!e.alive) continue;
 
         // ---- 1) 应用持续效果并递减计时 ----
+        //
+        // 注意：这里**不设国库下限保护**。曾经加过一层「不得低于 -2 季收入」
+        // 的兜底，用来掩盖「离散资源损失被按 duration 重复施加」的缺陷；
+        // 根因已在激活路径修正（见下方 Auto 决议处），兜底只会让
+        // 一个刻意注入大额支出的结算顺序测试失真。
+        // 现在行为是确定的：活跃决议按其声明的数值逐季施加，玩家可预期。
         for (auto& a : e.resolutions.active) {
             if (a.ticksLeft == 0) continue;
             if (resTargetToMod(a.target) == ModKind::Count) {
                 applyNumericDelta(e, a.target, a.value);
+                if (e.isPlayer) st.market.margin.cash = e.treasury;
             }
             if (a.ticksLeft > 0) --a.ticksLeft;
         }
@@ -155,10 +162,19 @@ void resolutionPhase(GameState& st, TickReport& rep) {
                 continue;
             }
 
-            // Auto / Preventable：立即生效。duration 必须传递，
-            // 否则本应「持续 N 季」的减益会变成永久。
+            // Auto / Preventable：立即生效。
+            //
+            // **离散资源的损失必须一次性结算，不能按 duration 重复施加。**
+            // `duration` 表达的是「修正类效果持续多少季」，而 Treasury /
+            // Influence / Unity / Military / Economy 是**存量型数值**。
+            // 旧写法把 duration 一并传给数值类效果，于是「面包暴动」这条
+            // 灾难决议（Treasury -8,000）会连扣 24 季 = 192,000 cr，
+            // 对季度收入只有 210 cr 的帝国等同于直接宣判死刑。
+            // 实测玩家在 t=35~57 每季固定流失 8,000 cr，来源就是它。
+            // 现在：离散资源一次性扣完；修正类（ResStability / ResTrade /
+            // ResBuild / ResMilitary / ResResearch / ResUnrest）保留持续期。
             std::string src(d.nameZh);
-            applyEffect(st, e, id, d.onActivate, d.duration, src);
+            applyEffect(st, e, id, d.onActivate, 0, src);
             if (d.duration > 0) applyEffect(st, e, id, d.onTick, d.duration, src);
             if (e.isPlayer) {
                 bool good = resEffectIsPositive(d.onActivate.target, d.onActivate.value);
@@ -215,11 +231,22 @@ void resolutionPhase(GameState& st, TickReport& rep) {
             if (c.ticksLeft <= 0) {
                 c.failed = true;
                 e.resolutions.failed.push_back(c.defId);
-                // 失败惩罚持续「倒计时长度」那么多季，而非永久 ——
-                // 否则一场 200 季的对局会因若干次失败而不可逆退化。
-                // 成功奖励则永久保留（这才是完成的激励）。
+                // 失败惩罚的**持续时间必须与惩罚量级分开考虑**。
+                //
+                // 旧写法把惩罚持续 `d.countdownTicks` 季，而惩罚本身往往是
+                // 一次性口径的金额（例如「基建攻坚」失败 = 国库 -12,000）。
+                // 两者相乘就变成 8 × 12,000 = 96,000 —— 一条启动成本只有
+                // 6,000 cr 的决议，失败却要付出 16 倍的代价。
+                // 实测玩家因此在 t=18 起每季固定流失 12,000 cr，
+                // 25 季内从 12.4 万跌到破产，而 lastIncome 始终为正，
+                // 玩家完全看不到钱去了哪里。
+                //
+                // 修正：国库/影响力这类**离散资源**的惩罚一次性结算；
+                // 其余（修正类、稳定度等）保留有限持续期，避免永久退化。
+                const bool lumpSum = (d.onFail.target == ResTarget::Treasury ||
+                                      d.onFail.target == ResTarget::Influence);
                 std::string src(d.nameZh);
-                applyEffect(st, e, c.defId, d.onFail, d.countdownTicks, src);
+                applyEffect(st, e, c.defId, d.onFail, lumpSum ? 0 : d.countdownTicks, src);
                 if (e.isPlayer) {
                     st.logEvent(LogPhase::Event, "resolution.failed",
                                 "【决议失败】" + std::string(d.nameZh) + " 超时 → " + resEffectText(d.onFail),
@@ -321,6 +348,22 @@ void resolutionAiPhase(GameState& st) {
             if (e.treasury.rawValue() < Fixed(d.cost.credits).rawValue()) continue;
             if (e.influence.rawValue() < Fixed(d.cost.influence).rawValue()) continue;
             if (e.apLeft < d.cost.ap) continue;
+            // ---- 持续代价的支付能力闸门（必须有，否则 AI 会自杀）----
+            //
+            // Active 决议的数值型效果会**按季重复施加**。一条
+            // `Treasury -12,000 / 季` 的决议，对一个季度收入只有 210 cr 的帝国
+            // 就是每季 57 倍的收入缺口 —— 实测玩家（AI 代管决议）因此在 t=18 起
+            // 每季固定流失 12,000 cr，25 季内从 12.4 万跌到破产，
+            // 而 `lastIncome` 始终为正，玩家完全看不到钱去了哪里
+            //（流失发生在 resolutionPhase，不在 economyPhase）。
+            // 规则：单季持续代价不得超过「本季收入 + 国库存量的 2%」。
+            {
+                Fixed recurring = Fixed(0);
+                if (d.onActivate.target == ResTarget::Treasury && d.onActivate.value.rawValue() < 0)
+                    recurring += -d.onActivate.value;
+                Fixed budget = fxMax(e.lastIncome, Fixed(0)) + e.treasury * Fixed::pct(2);
+                if (recurring.rawValue() > budget.rawValue()) continue;
+            }
             // 互斥与依赖链
             if (!resCanActivate(st, e.id, i, nullptr)) continue;
             i64 sc = aiResolutionPreference(st, e, d);

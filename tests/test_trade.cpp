@@ -101,7 +101,13 @@ TEST(trade, surplus_and_need_are_flow_based) {
             Fixed surplus = exportableSurplus(st, e, cc);
             Fixed need = importNeed(st, e, cc);
             Fixed prod = empireProduction(st, e, cc);
-            Fixed dem = e.demand[static_cast<std::size_t>(c)];
+            // 检查用的「需求」必须与 importNeed 内部用的是同一个量。
+            // importNeed 算的是 `resourceDemand + 国家工程补给 − 产出`；
+            // 旧断言只比 `e.demand`，于是在有在建工程时会误报 ——
+            // 工程补给让真实需求高于 e.demand，而产出恰好落在两者之间，
+            // 于是出现「importNeed > 0 但 demand <= prod」的假失败。
+            Fixed dem = resourceDemand(st, e, cc);
+            for (const auto& project : e.developmentProjects) dem += Fixed(project.supplies[c]);
             CHECK(!(surplus.rawValue() > 0 && need.rawValue() > 0));
             if (surplus.rawValue() > 0) CHECK(prod.rawValue() > dem.rawValue());
             if (need.rawValue() > 0) CHECK(dem.rawValue() > prod.rawValue());

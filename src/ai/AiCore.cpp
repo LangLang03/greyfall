@@ -332,6 +332,21 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
             break;
         }
         case AiActionKind::DeclareWar: {
+            // 难度决定宣战意愿；同时对"没有胜算的战争"加一道现实约束，
+            // 避免 AI 反复向明显强于自己的对手宣战（那既不符合 AI 的
+            // EV 最大化，也会把战争变成无意义的噪声）。
+            Fixed willingness = aiWarWillingness(st.difficulty);
+            if (a.target == kPlayerId) {
+                const Empire* foe = st.empire(a.target);
+                if (foe != nullptr) {
+                    // 己方战力明显劣势时降低意愿（不是绝对禁止：绝望的 AI 仍会铤而走险）
+                    const Fixed mine = e->military;
+                    const Fixed theirs = foe->military;
+                    if (theirs.rawValue() > 0 && mine.rawValue() * 100 < theirs.rawValue() * 80)
+                        willingness = willingness / Fixed(3);
+                }
+            }
+            if (!st.rng.chance(RngStream::Ai, fxClamp(willingness, Fixed::pct(5), Fixed::pct(95)))) break;
             declareWar(st, actor, a.target, true);
             e->lastWarTick = static_cast<u32>(st.tick);
             st.logEvent(LogPhase::Combat, kLogWar, e->name + " 向目标宣战", actor);
@@ -368,6 +383,31 @@ void aiExecuteAction(GameState& st, u32 actor, const AiAction& a, TickReport& re
             }
             // 记录真实入侵，启动冷却（见 ForwardSimulator 的 kInvadeCooldownQuarters）
             e->lastInvadeTick = st.tick;
+            // 难度决定投入的兵力规模：低难度下只派一部分舰队，给玩家缓冲期。
+            // 这是「AI 强度参数化」的第二条通道（第一条是宣战意愿）。
+            {
+                const Fixed agg = aiAggression(st.difficulty);
+                if (agg.rawValue() < Fixed(1).rawValue()) {
+                    // 实际投入 = sent × agg（向下取整，至少 1 支）
+                    int commit = static_cast<int>((static_cast<i64>(sent) * agg.rawValue()) / FIX);
+                    if (commit < 1) commit = 1;
+                    if (commit > sent) commit = sent;
+                    const int keep = sent - commit;
+                    // 至少派 1 支：宣战了却一支不出会变成纯噪声
+                    if (keep > 0 && sent - keep >= 1) {
+                        int left = keep;
+                        for (u32 fid : e->fleets) {
+                            if (left <= 0) break;
+                            Fleet* f = st.fleet(fid);
+                            if (f == nullptr || f->targetSystem != dest) continue;
+                            f->targetSystem = f->system;
+                            f->order = FleetOrder::Patrol;
+                            --left;
+                        }
+                        sent -= keep;
+                    }
+                }
+            }
             st.logEvent(LogPhase::Combat, kLogWar,
                         e->name + " 出兵 " + std::to_string(sent) + " 支舰队进攻 " +
                             std::string(st.system(dest) ? st.system(dest)->name : "?"),

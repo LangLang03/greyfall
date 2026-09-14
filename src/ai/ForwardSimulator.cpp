@@ -81,6 +81,24 @@ Fixed simulateExecution(const Projection& p, u8 res, i64 qty, bool buy, Fixed* s
     return false;
 }
 
+/// 该星系是否已被另一方的舰队作为进攻目标（排他判据）。
+///
+/// 防止「一拥而上」：每个帝国独立做 EV 评估时都会挑最薄弱的敌方星系，
+/// 于是同一个目标会被多家同时选中。实测开局第 6 季就有 **三个帝国同时
+/// 入侵玩家的同一个星系**（宇普渡-3），玩家在 25 季内失去全部领土 ——
+/// 这不是难度，而是缺乏协调造成的失真。现实中多方会争夺同一目标，
+/// 但不会在同一季齐步行动；用「目标已被宣示」作为排他判据，
+/// 既保留竞争，又避免开局碾压。
+[[nodiscard]] bool invasionTargetClaimed(const GameState& st, u32 system, u32 except) {
+    for (const auto& f : st.fleets) {
+        if (f.owner == except) continue;
+        if (f.order != FleetOrder::Engage) continue;
+        if (f.targetSystem != system && f.system != system) continue;
+        return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::string_view aiActionName(AiActionKind k) {
@@ -433,6 +451,8 @@ std::vector<AiAction> generateCandidates(const GameState& st, u32 actor, const I
             Fixed score = adjacent ? Fixed(100) : Fixed(50);
             // 防守薄弱的优先
             score += Fixed(1000) / (systemDefense(st, sid) + Fixed(1));
+            // 已被别人盯上的目标降权（见 invasionTargetClaimed）
+            if (invasionTargetClaimed(st, sid, actor)) score = score / Fixed(4);
             if (score.rawValue() > bestScore.rawValue()) {
                 bestScore = score;
                 target = sid;
@@ -442,6 +462,8 @@ std::vector<AiAction> generateCandidates(const GameState& st, u32 actor, const I
         a.kind = AiActionKind::Invade;
         a.target = other.id;
         a.qty = static_cast<i64>(target);
+        // 目标已被他方宣示时不生成候选（避免多方同时扑向同一目标）
+        if (invasionTargetClaimed(st, target, actor)) break;
         a.desc = "出兵进攻 " + other.name + " 的 " +
                  std::string(st.system(target) ? st.system(target)->name : "?");
         out.push_back(std::move(a));
