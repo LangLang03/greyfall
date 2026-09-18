@@ -182,42 +182,71 @@ TickReport advanceOneTick(GameState& st) {
     TickReport rep;
     rep.tick = st.tick;
     phaseActionPoints(st);
+    rep.phaseTrace.push_back("phaseActionPoints");
     phaseResolvePending(st, rep);
+    rep.phaseTrace.push_back("phaseResolvePending");
     // AI 研究必须在这里跑：收入由 tick 末尾的 phaseEconomy 到账，
     // 而 phaseMarket 会在 tick 开头把国库花掉。
     // 夹在两者之间（原位置在 phaseEvents 内）会让研究永远分不到预算 ——
     // 实测 AI 国库被精确抽到等于一季收入，科技 120 季只完成 3~4 项。
     aiResearchPhase(st);
+    rep.phaseTrace.push_back("aiResearchPhase");
     // AI 决议也要在这里决策：决议成本 2,500~11,500 cr，而 phaseMarket
     // 会在 tick 开头把国库花掉。原先决议在市场之后决策，实测 AI
     // 「缺钱」的候选决议有 20~31 项，生效决议长期停在 2~3 项（上限为 6）。
     resolutionAiPhase(st);
+    rep.phaseTrace.push_back("resolutionAiPhase");
     phaseMarket(st, rep);
+    rep.phaseTrace.push_back("phaseMarket");
     phaseVolMargin(st, rep);
+    rep.phaseTrace.push_back("phaseVolMargin");
     phaseReadPlayer(st);
+    rep.phaseTrace.push_back("phaseReadPlayer");
     phaseUpdateModel(st);
+    rep.phaseTrace.push_back("phaseUpdateModel");
     phaseAiActions(st, rep);
+    rep.phaseTrace.push_back("phaseAiActions");
     phaseFederation(st);
+    rep.phaseTrace.push_back("phaseFederation");
     phaseDomestic(st);
+    rep.phaseTrace.push_back("phaseDomestic");
     phaseProposals(st);
+    rep.phaseTrace.push_back("phaseProposals");
     phaseCasus(st);
+    rep.phaseTrace.push_back("phaseCasus");
     phaseIntel(st);
+    rep.phaseTrace.push_back("phaseIntel");
     phaseStarbase(st);
+    rep.phaseTrace.push_back("phaseStarbase");
     phaseRevolt(st);
+    rep.phaseTrace.push_back("phaseRevolt");
     phaseIdeology(st);
+    rep.phaseTrace.push_back("phaseIdeology");
     phaseConstruction(st);
+    rep.phaseTrace.push_back("phaseConstruction");
     phaseCorruption(st);
+    rep.phaseTrace.push_back("phaseCorruption");
     phaseSpecies(st);
+    rep.phaseTrace.push_back("phaseSpecies");
     phaseGovernment(st);
+    rep.phaseTrace.push_back("phaseGovernment");
     phasePersonnel(st);
+    rep.phaseTrace.push_back("phasePersonnel");
     // 军备积累先于战斗：造舰需要时间，军力由经济体量决定并逐步逼近目标
     phaseMilitary(st);
+    rep.phaseTrace.push_back("phaseMilitary");
     phaseCombat(st, rep);
+    rep.phaseTrace.push_back("phaseCombat");
     phaseEvents(st, rep);
+    rep.phaseTrace.push_back("phaseEvents");
     phaseClues(st, rep);
+    rep.phaseTrace.push_back("phaseClues");
     phasePlot(st);
+    rep.phaseTrace.push_back("phasePlot");
     phaseEconomy(st);
+    rep.phaseTrace.push_back("phaseEconomy");
     phaseCommit(st);
+    rep.phaseTrace.push_back("phaseCommit");
     st.logEvent(LogPhase::Tick, kLogTick,
                 "tick " + std::to_string(st.tick) + " 完成：成交 " + std::to_string(rep.fills) + " 笔，名义额 " +
                     fixedStr(rep.notional, 0) + "，AI 动作 " + std::to_string(rep.aiActions));

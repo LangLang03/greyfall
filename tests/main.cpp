@@ -33,5 +33,6 @@
 #include "test_save.cpp"
 #include "test_mechanics.cpp"
 #include "test_development.cpp"
+#include "test_tickorder.cpp"
 
 GF_TEST_MAIN()

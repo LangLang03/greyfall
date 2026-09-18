@@ -24,7 +24,7 @@ endif()
 
 # 每个用例使用独立工作目录：并发执行时多个进程不会竞争同一个 test-data 前缀，
 # 也不会互相看到对方的结果文件（此前这是并行 CTest 下偶发失败的来源）。
-set(GF_SUITES crypto rng fixed save market ai items clue gen replay cli resolution victory casus personnel gov design starbase revolt species construction negotiate combat techpolicy front peace parliament trade commander spy mechanics development)
+set(GF_SUITES tickorder crypto rng fixed save market ai items clue gen replay cli resolution victory casus personnel gov design starbase revolt species construction negotiate combat techpolicy front peace parliament trade commander spy mechanics development)
 foreach(suite IN LISTS GF_SUITES)
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/run-${suite}")
   add_test(NAME ${suite} COMMAND greyfall_tests ${suite})
