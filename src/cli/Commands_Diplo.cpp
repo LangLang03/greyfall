@@ -13,7 +13,7 @@
 #include "ai/Reputation.h"
 #include "ai/ToModel.h"
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "core/TickPipeline.h"
 #include "domain/Fog.h"

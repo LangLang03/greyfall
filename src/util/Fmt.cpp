@@ -1,5 +1,7 @@
 #include "util/Fmt.h"
 
+#include "util/TextTable.h"
+
 #include <cstdio>
 
 #include "util/Str.h"
@@ -187,5 +189,11 @@ void warn(std::string_view line) {
     std::fwrite(s.data(), 1, s.size(), stdout);
     std::fputc('\n', stdout);
 }
+
+
+/// TextTable 的输出便捷方法。
+/// 实现放在这里而不是 util/TextTable.cpp：渲染是纯字符串运算，
+/// 而「写到哪里」是 Fmt 的职责，保持 TextTable 自身无副作用。
+void TextTable::print() const { out(render()); }
 
 }  // namespace gf

@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/GameState.h"
 #include "domain/Treaty.h"
 #include "gen/EmpireGen.h"

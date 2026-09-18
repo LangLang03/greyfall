@@ -3,7 +3,7 @@
 
 #include "ai/FactionAI.h"
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "combat/Resolver.h"
 #include "combat/Military.h"
 #include "core/Errors.h"

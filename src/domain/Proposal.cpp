@@ -4,7 +4,7 @@
 #include <string>
 
 #include "ai/Negotiation.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/GameState.h"
 #include "domain/Empire.h"
 #include "domain/Planet.h"

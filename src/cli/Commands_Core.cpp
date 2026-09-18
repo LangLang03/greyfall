@@ -4,7 +4,7 @@
 
 #include "cli/Commands.h"
 #include "cli/Man.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "core/ResolutionEngine.h"
 #include "core/SelfTest.h"

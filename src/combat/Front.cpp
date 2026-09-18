@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "combat/Resolver.h"
 #include "domain/Treaty.h"
 #include "util/Fmt.h"

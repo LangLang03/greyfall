@@ -5,7 +5,7 @@
 
 #include "ai/AiCore.h"
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "clue/ClueGraph.h"
 #include "core/Errors.h"
 #include "core/TickPipeline.h"

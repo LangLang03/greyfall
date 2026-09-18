@@ -1,6 +1,6 @@
 // 建造队列：查看 / 取消 / 清空
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Construction.h"
 #include "domain/Fleet.h"

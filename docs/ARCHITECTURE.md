@@ -6,8 +6,11 @@
 > God 文件已拆分：`plot/BeatResolver.cpp` **653 → 147 行**，
 > 经济结算迁至 `domain/Economy.{h,cpp}`（292 行）、
 > 事件与抉择迁至 `plot/EventSystem.{h,cpp}`（294 行）。
-> §2 声明式阶段表、§1 的 domain→cli 反向依赖（16 个文件）**尚未实施**。
-> 货币守恒仍未闭合 —— 完整诊断与正确修法见 §6.2。
+> **domain→cli 反向依赖已清除**：根因是 `TextTable` 被放在 `cli/`，
+> 而它只依赖 `util/`。下沉到 `util/TextTable.{h,cpp}` 后，
+> 16 个 `domain/`+`combat/` 文件的反向 include 一次性消失，
+> 全项目已无 `domain → cli` 的包含边。
+> §2 声明式阶段表**尚未实施**；货币守恒仍未闭合（诊断与修法见 §6.2）。
 
 ## 0. 重写的判定与范围
 
@@ -24,7 +27,7 @@
 | 市场无限套利 | 5 季 40 倍、25 季 360 倍；FX→BZ 净价差 504,970% | ✅ 已修（变为净亏损） |
 | 决议重复扣款 | 「面包暴动」-8,000 × 24 季 = 192,000；玩家破产的真正主因 | ✅ 已修 |
 | God 文件 | `plot/BeatResolver.cpp` 653 行含经济核心 | ✅ 已拆（653 → 147 行） |
-| domain 反向依赖 cli | 16 个文件直接返回渲染好的表格字符串 | ❌ 未做 |
+| domain 反向依赖 cli | 16 个文件 include `cli/TextTable.h` | ✅ 已修（TextTable 下沉到 util/） |
 
 **保留**：crypto / save / rng / Fixed / mkt 撮合内核 / content 静态表 / 测试套件。
 **已重写**：战争-和平收敛、市场锚定与守恒、剧情推进口径、经济闸门、

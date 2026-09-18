@@ -2,7 +2,7 @@
 #include <algorithm>
 
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "combat/Resolver.h"
 #include "core/Errors.h"
 #include "domain/Commander.h"

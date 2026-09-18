@@ -2,7 +2,7 @@
 #include <algorithm>
 
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Policy.h"
 #include "util/Fmt.h"

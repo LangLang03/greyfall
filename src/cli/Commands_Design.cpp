@@ -1,6 +1,6 @@
 // 舰船设计器：新建舰体、装卸模块、改造现役舰队
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Empire.h"
 #include "domain/Fleet.h"

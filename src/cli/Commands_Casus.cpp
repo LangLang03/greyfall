@@ -1,6 +1,6 @@
 // 正当战争理由与战争疲劳
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/CasusBelli.h"
 #include "util/Fmt.h"

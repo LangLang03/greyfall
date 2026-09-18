@@ -1,7 +1,7 @@
 #include "domain/Development.h"
 
 #include <algorithm>
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/GameState.h"
 #include "domain/Construction.h"
 #include "util/Fmt.h"

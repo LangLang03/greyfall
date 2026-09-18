@@ -1,6 +1,6 @@
 // 提案箱：回应 AI 主动提出的交易与协定
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Proposal.h"
 #include "util/Fmt.h"

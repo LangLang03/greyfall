@@ -1,6 +1,6 @@
 // 种族、奴役、太空生物、外交施压、基因改造
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/SpeciesAdv.h"
 #include "util/Fmt.h"

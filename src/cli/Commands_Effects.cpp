@@ -3,7 +3,7 @@
 
 #include "ai/FactionAI.h"
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/GameState.h"
 #include "core/ResolutionEngine.h"
 #include "domain/CasusBelli.h"

@@ -1,6 +1,6 @@
 // 恒星基地：星系级永久设施
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Starbase.h"
 #include "util/Fmt.h"

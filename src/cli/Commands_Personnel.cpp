@@ -1,6 +1,6 @@
 // 人事：领袖、科学家、集团军
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Government.h"
 #include "domain/Personnel.h"

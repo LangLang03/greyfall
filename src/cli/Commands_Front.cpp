@@ -1,6 +1,6 @@
 // 前线系统 CLI
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "combat/Front.h"
 #include "core/Errors.h"
 #include "domain/Treaty.h"

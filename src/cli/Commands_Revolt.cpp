@@ -1,6 +1,6 @@
 // 起义与党派斗争
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "domain/Revolt.h"
 #include "util/Fmt.h"

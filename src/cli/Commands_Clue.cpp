@@ -2,7 +2,7 @@
 #include <string>
 
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "clue/ClueGraph.h"
 #include "core/Errors.h"
 #include "plot/BeatResolver.h"

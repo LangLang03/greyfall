@@ -1,7 +1,7 @@
 #include "save/Serde.h"
 #include <filesystem>
 #include "cli/Commands.h"
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 #include "core/Errors.h"
 #include "save/Chronicle.h"
 #include "save/SaveFile.h"

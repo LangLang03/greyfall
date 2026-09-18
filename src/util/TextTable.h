@@ -1,5 +1,11 @@
 #pragma once
 // TextTable —— 东亚宽度感知的等宽表格渲染（不依赖 locale）
+//
+// 注意它住在 util/ 而不是 cli/：这是一种**纯文本格式化**工具，
+// 只依赖 util/{Fixed,Fmt,Str,Utf8Width}，不需要任何命令层能力。
+// 它此前放在 cli/ 导致 16 个 domain/combat 文件不得不 include "cli/..."
+// 才能渲染报告 —— 那是分层违规（domain 反向依赖 cli）。
+// 把工具下沉到 util/ 后，那 16 条反向边一次性消失。
 #include <string>
 #include <string_view>
 #include <vector>

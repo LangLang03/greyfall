@@ -1,4 +1,4 @@
-#include "cli/TextTable.h"
+#include "util/TextTable.h"
 
 #include <algorithm>
 
@@ -120,7 +120,5 @@ std::string TextTable::render() const {
     while (!out.empty() && out.back() == '\n') out.pop_back();
     return out;
 }
-
-void TextTable::print() const { out(render()); }
 
 }  // namespace gf
