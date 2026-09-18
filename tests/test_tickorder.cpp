@@ -321,3 +321,40 @@ TEST(tickorder, trace_records_every_phase_exactly_once) {
             CHECK(rep.phaseTrace[i] != rep.phaseTrace[j]);
     CHECK(rep.phaseTrace.size() >= 20);
 }
+
+// ---------------------------------------------------------------------------
+// 整条流水线的**全序**断言。
+//
+// 上面的用例只锁定了几条关键相对顺序；这一条锁定**全部 29 个阶段**。
+// 它同时是一份可执行的文档：改错顺序、漏掉阶段、意外插入阶段，都会在这里失败。
+//
+// 顺序不是随意的，几条关键约束及其后果：
+//   · aiResearchPhase / resolutionAiPhase 在 phaseMarket **之前** ——
+//     否则市场先把国库花到「恰好等于一季收入」，研究与决议永远分不到预算
+//     （实测 AI 120 季只完成 3~4 项科技）
+//   · phaseMilitary 在 phaseCombat **之前** —— 军备积累要能影响当季战斗
+//   · phaseEconomy 在倒数第二 —— 收入是 tick 的产出，
+//     必须在本季所有开支之后到账，才能被下一季使用
+//   · phaseCommit 最后 —— 不变式收口、tick++、胜利评估
+// ---------------------------------------------------------------------------
+TEST(tickorder, full_pipeline_order_is_locked) {
+    GameState st = orderWorld();
+    TickReport rep = advanceOneTick(st);
+    static const char* kExpected[] = {
+        "phaseActionPoints", "phaseResolvePending",
+        "aiResearchPhase", "resolutionAiPhase",
+        "phaseMarket", "phaseVolMargin",
+        "phaseReadPlayer", "phaseUpdateModel", "phaseAiActions",
+        "phaseFederation", "phaseDomestic", "phaseProposals", "phaseCasus",
+        "phaseIntel", "phaseStarbase", "phaseRevolt", "phaseIdeology",
+        "phaseConstruction", "phaseCorruption", "phaseSpecies",
+        "phaseGovernment", "phasePersonnel",
+        "phaseMilitary", "phaseCombat",
+        "phaseEvents", "phaseClues", "phasePlot",
+        "phaseEconomy", "phaseCommit",
+    };
+    const std::size_t expected = sizeof(kExpected) / sizeof(kExpected[0]);
+    CHECK_EQ(rep.phaseTrace.size(), expected);
+    for (std::size_t i = 0; i < expected && i < rep.phaseTrace.size(); ++i)
+        CHECK(rep.phaseTrace[i] == kExpected[i]);
+}
