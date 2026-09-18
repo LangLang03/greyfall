@@ -8,6 +8,7 @@
 #include "core/TickPipeline.h"
 #include "domain/Treaty.h"
 #include "gen/WorldGen.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 
 using namespace gf;

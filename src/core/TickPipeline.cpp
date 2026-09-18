@@ -29,6 +29,7 @@
 #include "domain/Trade.h"
 #include "domain/Policy.h"
 #include "domain/Economy.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "rng/Streams.h"
 

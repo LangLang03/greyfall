@@ -12,6 +12,7 @@
 #include "domain/Species.h"
 #include "gen/EmpireGen.h"
 #include "gen/WorldGen.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "save/Serde.h"
 

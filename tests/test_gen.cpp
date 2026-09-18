@@ -1,5 +1,6 @@
 // 世界生成：同种子同结果 / 星图连通性 / 表规模与引用完整性 / 词缀 / 玩家起点
 #include <algorithm>
+#include "plot/EventSystem.h"
 #include <set>
 
 #include "check.h"

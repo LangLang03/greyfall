@@ -6,6 +6,7 @@
 //
 // 目的（方案 §13）：检验 AI 能剥削弱者、被强者反制、并惩罚 rollbackCount > 0。
 // 以 CTest 用例形式运行，默认 50 个纪元（可通过 --epochs N 调整）。
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "mkt/ManipulationDetect.h"
 #include "mkt/Futures.h"

@@ -1,5 +1,6 @@
 // 重放：逐 tick 状态哈希一致 / RNG 消费计数入档 / 战斗确定性 / 完整流水线阶段序
 #include "check.h"
+#include "plot/EventSystem.h"
 #include "ai/AiCore.h"
 #include "combat/Resolver.h"
 #include "core/GameState.h"

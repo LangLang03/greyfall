@@ -1,6 +1,7 @@
 // 市场：撮合单调性与无自成交 / 冲击定律 / 保证金级联收敛 / 期限结构与基差 /
 //       套利偏差 / 波动率聚集 / 操纵检测 / 内幕 / 违约与托管
 #include <algorithm>
+#include "plot/EventSystem.h"
 
 #include "check.h"
 #include "core/GameState.h"

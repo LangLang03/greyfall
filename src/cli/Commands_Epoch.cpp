@@ -10,6 +10,7 @@
 #include "core/Errors.h"
 #include "core/TickPipeline.h"
 #include "mkt/OrderBook.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "save/Chronicle.h"
 #include "util/Fmt.h"
@@ -86,10 +87,23 @@ int cmdChoose(CliEnv& env, const Args& args) {
         fail(ExitCode::BadArgs, "抉择序号越界（0.." + std::to_string(env.st.pending.size() - 1) + "）");
     }
     if (args.posCount() == 1 && !args.has("option")) {
-        // 只给了序号：打印选项让玩家选
+        // 只给了序号：打印选项让玩家选。
+        //
+        // 这种情况**必须返回非 0 退出码**：本命令的文档形式是
+        // `choose <index> <option>`，缺 <option> 属于用法错误。
+        // 旧实现返回 0，于是脚本无法区分「结算成功」与「只是打印了选项」——
+        // 实测一个 `if [ $? -eq 5 ]; then choose 0; fi` 的自动化循环会
+        // 静默空转 40 季（exit 0 既不是成功推进也不是待抉择信号）。
+        // 项目自述「可安全写进脚本、放进 CI」，这个返回值是其中的关键一环。
         out(pendingText(env.st, env.st.pending.items[static_cast<std::size_t>(idx)]));
-        out("用法：greyfall choose " + std::to_string(idx) + " <option>");
-        return 0;
+        out(style("缺少选项参数：结算请用 `greyfall choose " + std::to_string(idx) +
+                      " <option>`（0.." + std::to_string(
+                          env.st.pending.items[static_cast<std::size_t>(idx)].options.empty()
+                              ? 1
+                              : env.st.pending.items[static_cast<std::size_t>(idx)].options.size() - 1) +
+                      "）",
+                  Style::Warn));
+        return static_cast<int>(ExitCode::BadArgs);
     }
     std::string err;
     if (!resolveChoice(env.st, static_cast<std::size_t>(idx), static_cast<int>(opt), &err)) {

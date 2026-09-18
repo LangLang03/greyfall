@@ -22,6 +22,7 @@
 #include "mkt/OrderBook.h"
 #include "mkt/Settlement.h"
 #include "mkt/VolModel.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "save/Migration.h"
 #include "save/Serde.h"

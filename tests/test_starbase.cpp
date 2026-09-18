@@ -1,5 +1,6 @@
 // 恒星基地与建筑效果
 #include <algorithm>
+#include "plot/EventSystem.h"
 
 #include "check.h"
 #include "combat/Resolver.h"

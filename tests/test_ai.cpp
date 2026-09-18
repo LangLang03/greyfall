@@ -18,6 +18,7 @@
 #include "check.h"
 #include "core/GameState.h"
 #include "core/TickPipeline.h"
+#include "plot/EventSystem.h"
 #include "plot/BeatResolver.h"
 #include "gen/WorldGen.h"
 
