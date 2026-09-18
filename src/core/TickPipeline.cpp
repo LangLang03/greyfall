@@ -28,6 +28,7 @@
 #include "domain/SpyNetwork.h"
 #include "domain/Trade.h"
 #include "domain/Policy.h"
+#include "domain/Economy.h"
 #include "plot/BeatResolver.h"
 #include "rng/Streams.h"
 

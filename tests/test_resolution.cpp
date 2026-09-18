@@ -1,5 +1,6 @@
 // 决议系统与胜利条件
 #include <algorithm>
+#include "domain/Economy.h"
 
 #include "check.h"
 #include "core/GameState.h"

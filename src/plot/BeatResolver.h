@@ -1,5 +1,6 @@
 #pragma once
-// 剧情幕推进、事件调度落地、结局评估、经济结算
+// 剧情幕推进、事件调度落地、抉择结算、结局评估。
+// 经济结算已迁至 domain/Economy.h（此前是本模块的分层违规）。
 #include "core/GameState.h"
 #include "plot/Skeleton.h"
 
@@ -12,9 +13,6 @@ void eventsPhase(GameState& st, TickReport& rep);
 
 /// 阶段 12：结论解锁 → 幕次推进 → 结局评估
 void plotPhase(GameState& st);
-
-/// 阶段 13：收入/维护/折旧/种族张力
-void economyPhase(GameState& st);
 
 /// 自动结算一个抉择（headless / bots 用）
 void resolveChoiceAuto(GameState& st, int optionIndex);

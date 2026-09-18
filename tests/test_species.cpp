@@ -1,5 +1,6 @@
 // 种族、奴役、太空生物、外交施压、基因改造
 #include <algorithm>
+#include "domain/Economy.h"
 
 #include "check.h"
 #include "core/GameState.h"

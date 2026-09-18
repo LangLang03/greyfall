@@ -1,4 +1,5 @@
 #include <fstream>
+#include "domain/Economy.h"
 #include <iterator>
 
 #include "check.h"
