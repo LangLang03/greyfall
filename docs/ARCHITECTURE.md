@@ -238,6 +238,48 @@ devGrowth = 基础(25bp) × (1 + sqrt(人口/10)) × 稳定度 × (1 - 民怨)
 测试对顺序做精确断言；三种突变（研究后移、军备后移、阶段重复）
 **全部被捕获**（见 `tests/test_tickorder.cpp`）。
 
+
+### 6.3 未解决的架构问题：`domain → core/GameState.h` 概念环
+
+**现状**：24 个 `domain/*.cpp` 都 include `core/GameState.h`，而
+`core/GameState.h` 又 include 了 `domain/{Empire,Fleet,Planet,Sector,Treaty,...}.h`。
+这是一个**概念环**，不是简单的写错 include。
+
+**为什么不能像 `TextTable` 那样直接搬**：
+- `domain/*.cpp` 需要 `GameState` 的**完整定义**（调用 `st.empire(id)`、
+  `st.logEvent(...)` 等），前向声明不够
+- 而 `GameState` 的定义里**必须**有 `std::vector<Empire>`、`std::vector<Fleet>` …
+  —— 它本质上是在组合 domain 类型
+- 所以「domain 依赖 core」与「core 依赖 domain」在类型层面同时成立，
+  移动任何一个文件都消不掉它
+
+**实测使用面**（`src/domain/*.cpp` 里出现的 core 符号）：
+```
+235 次 GameState
+ 62 次 LogPhase
+ 10 次 kLogWar
+```
+也就是说 domain 真正需要的是**两样东西**：`GameState` 这个聚合根，
+以及 `LogPhase`/日志码这几个**纯枚举**。
+
+**正确的修法**（三步，建议按序做）：
+1. 把 `LogPhase` 与 `kLog*` 码从 `core/LogCodes.h` 下沉到
+   `domain/LogCodes.h`（它们没有任何 core 依赖，是纯分类枚举）。
+   这一步会消掉相当一部分「为了拿日志码而 include GameState」的情况。
+2. 把 `logEvent` 从 `GameState` 的成员函数改成自由函数
+   `void logEvent(GameState&, LogPhase, std::string_view, std::string, u32)`，
+   放在 `core/Log.h`。这样需要记录日志的 domain 代码只需前向声明
+   `struct GameState;` + include `core/Log.h`。
+3. 在架构文档里把 `GameState` 正式定位为**所有层共享的聚合根**
+   （而非 `core` 私有），并据此修订 §1 的 L0–L6 表 ——
+   现在的表把 `core` 放在 `domain` 之上，与「domain 需要 GameState」
+   这一事实矛盾。**文档与代码冲突时，要么改代码，要么改文档；
+   当前的文档是错的。**
+
+**风险提示**：第 2 步会触及 422 处以 `GameState&` 为参数的函数声明与
+约 320 处 `st.logEvent(...)` 调用点，属于大范围机械改动，
+必须分多次提交、每次跑全量测试。
+
 ### 6.2 未解决的根因：货币守恒仍未闭合
 
 **现象**（`--seed 5EED-C0FFEE`，8 帝国，48 星系）：
