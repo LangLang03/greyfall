@@ -103,6 +103,15 @@ int cmdStatus(CliEnv& env, const Args&) {
     t.row({"舰队", std::to_string(p.fleets.size()) + " 支"});
     t.row({"民怨 / 合法性", fixedStr(p.domestic.unrest, 2) + " / " + fixedStr(p.domestic.legitimacy, 2)});
     t.row({"信用评级", fixedStr(p.creditRating, 2)});
+    // 影响力与凝聚力必须显示在这里。
+    //
+    // 实测缺口：政策（`policy --enact`，需 200~500）与公民庆典
+    // （`resolve --activate civicFestival`，需 300）都按影响力计价，
+    // 但**没有任何命令显示玩家当前有多少** —— `policy`/`resolve` 只列代价。
+    // 结果是玩家只能靠"试着执行、失败、才知道不够"来探查自己的余额，
+    // 而影响力又是压制民怨/降低政变风险的唯一可用资源。
+    // 凝聚力（unity）同理，是飞升与部分决议的门槛。
+    t.row({"影响力 / 凝聚力", fixedStr(p.influence, 0) + " / " + fixedStr(p.unity, 0)});
     t.row({"读档次数", std::to_string(st.rollbackCount) + "（AI 会看到）"});
     {
         VictoryStatus vs = checkVictory(st);

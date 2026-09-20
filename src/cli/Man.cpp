@@ -309,8 +309,18 @@ const std::vector<ManEntry>& manEntries() {
          "舰队命令", "move|patrol|embargo|engage|escort|blockade|retreat。", "greyfall fleet --id 2 --order move --to 9"},
         {"edict", "运营", "greyfall edict <id>",
          "颁布法令", "国家法令持续 8 季，支付启动资金与每季维护，最多同时三项；派系援助有规模费用与 8 季间隔。", "greyfall edict 战时配给"},
-        {"research", "运营", "greyfall research <branch>",
-         "切换研究分支", "6 个分支任选。", "greyfall research 工程"},
+        {"research", "运营", "greyfall research <分支|科技> [--fund <cr/季>]",
+         "研究立项与每季投入",
+         "研究是**需要时间的长期投入**，不是一次性买断：立项后每季推进一次，"
+         "进度 = 基础速率 + `--fund` 换算的研究点（40 cr = 1 点），"
+         "并受「成本 / 最短工期」截断 —— 投入再多也不能跳过工期。"
+         "  · `--fund` 默认 8000 cr/季。不设资金时研究**几乎不会推进**："
+         "基础速率只有 1 点/季，而 1 层科技就需要 181 点。"
+         "  · 国库扣不起时会自动降档（不会透支），但降档后不会自动升回。"
+         "  · 同时只能攻关一项；中途换项会丢弃既有进度。"
+         "  · `research status` 查看进度、已投入季数与预计完成。"
+         "  · 分支名可用：物理 / 社会 / 工程 / 生物 / 计算 / 灵能；也可直接给科技 idName（如 eng3）。",
+         "greyfall research 工程 --fund 20000"},
         {"species", "运营", "greyfall species [--hunt <星系>|--can <批数>|--labor <制度>|--gene <方向>|--press <帝国> --kind <方式>]",
          "种族、奴役、太空生物、外交施压与基因改造",
          "**太空生物**：星系中的巨型生物（海星/虚空鲸/晶簇虫群/裂隙潜行者），"

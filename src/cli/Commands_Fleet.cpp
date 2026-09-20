@@ -215,8 +215,13 @@ int cmdResearch(CliEnv& env, const Args& args) {
                 fixedStr(env.player().tech.progress[static_cast<std::size_t>(b)], 1));
         }
         out("");
-        out("用法：greyfall research <物理|社会|工程|生物|计算|灵能>");
+        out("用法：greyfall research <物理|社会|工程|生物|计算|灵能> [--fund <cr/季>]");
         out("      greyfall research <科技 idName，如 comp6>");
+        // `--fund` 是这个命令的**必要知识**：不设资金时基础速率只有 1 点/季，
+        // 而 1 层科技需要 181 点 —— 等于立项后几乎不会推进。
+        // 实测（一次完整试玩）因为手册没写这个参数，玩家的研究白跑了 60 季。
+        out("      --fund 为每季投入（默认 8000 cr/季，40 cr = 1 研究点）。");
+        out("      不投入资金时研究几乎停滞；投入再多也不能跳过最短工期。");
         return 0;
     }
     std::string key = args.pos(0);
