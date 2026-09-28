@@ -745,9 +745,44 @@ greyfall epoch --next --inherit-legacy
 ### 9.1 构建
 
 ```bash
+# 开发版（默认）：全部命令可用
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
+
+### 9.1.1 两种构建：开发版 / 发布版
+
+```bash
+# 发布版：屏蔽 5 个调试命令
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGREYFALL_RELEASE=ON
+cmake --build build -j
+```
+
+| | 开发版（默认） | 发布版（`-DGREYFALL_RELEASE=ON`） |
+|---|---|---|
+| 调试命令 | 全部可用 | `logs` / `history` / `replay` / `rollback` / `chronicle` **被屏蔽** |
+| 其余命令 | 行为完全一致 | 行为完全一致 |
+| 存档格式 | schema 7，双向兼容 | schema 7，双向兼容 |
+
+屏蔽发生在**命令表**层面（`src/cli/Commands.cpp` 的 `commandTable()`），
+`help`、`man` 与命令分发都从同一张表读取，因此一处生效；
+发布版下执行这些命令会得到明确报错（退出码 1），而非笼统的「未知命令」：
+
+```
+greyfall: 命令【logs】在发布版中不可用 —— 它属于调试/开发工具
+（可查看全部事件记录、逐 tick 状态轨迹，或把存档回退到任意时点），
+会绕开本作「信息不对称 + 不可逆抉择」的核心机制。
+```
+
+**为什么屏蔽**：本作的核心机制是「信息不对称 + 不可逆抉择 + AI 会用
+`rollbackCount` 推断你是否会重试」。这 5 条命令是它们的直接反制 ——
+`logs` 给出全部事件记录（含 AI 决策的 EV 分解），`history` 给出逐 tick
+国力/国库轨迹，`replay` 能重放并 diff 状态，`rollback` 即 save-scumming，
+`chronicle` 让玩家精确知道 AI 掌握了几次回档。
+
+数据层（`history` 数组、chronicle 链文件）不受影响，开发版可完整使用。
+测试套件对两种构建都通过（`tests/test_cli.cpp` 的
+`release_gating_is_consistent_across_tables` 锁定命令表 / 手册 / 判定函数三者一致）。
 
 要求：**CMake ≥ 3.28**、支持 C++20 的编译器。已在 **GCC 16.2.1 / CMake 4.4.2** 上验证。
 零第三方依赖：SHA-256、ChaCha20、HMAC、PBKDF2 式 KDF、LZ77、varint、UTF-8 宽度表、

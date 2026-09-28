@@ -2,6 +2,31 @@
 
 > 本文介绍当前版本的操作流程、游戏规则、命令与参数。
 
+> ### 阅读前须知：两种构建
+>
+> 项目可以构建出两个版本，**命令集不同**：
+>
+> | | 开发版（默认） | 发布版（`-DGREYFALL_RELEASE=ON`） |
+> |---|---|---|
+> | 构建 | `cmake -S . -B build` | `cmake -S . -B build -DGREYFALL_RELEASE=ON` |
+> | 调试命令 | 全部可用 | **5 条被屏蔽** |
+>
+> 被屏蔽的 5 条命令是 `logs` / `history` / `replay` / `rollback` / `chronicle`。
+> 屏蔽的理由不是"它们没用"，而是它们**绕开本作的核心机制**：
+>
+> - `logs` 能看到全部事件记录（含 AI 决策的 EV 分解）
+> - `history` 能看到逐 tick 的国力/国库/指数轨迹
+> - `replay` 能从任意检查点重放并 diff 状态
+> - `rollback` 能把存档回退到任意时点 —— 即 save-scumming
+> - `chronicle` 能查看防读档哈希链，从而精确知道 AI 掌握了你几次回档
+>
+> 而本作的核心是「**信息不对称 + 不可逆抉择 + AI 会用 `rollbackCount`
+> 推断你是否会重试**」——这 5 条命令是它们的直接反制。
+>
+> **本教程中这些命令一律标注 ⚠ 开发版**，发布版下执行会得到明确报错
+> （退出码 1），`help` 与 `man` 也不会列出它们。
+> 其余全部命令在两个版本中行为完全一致。
+
 ---
 
 ## 目录
@@ -228,7 +253,7 @@ greyfall defer 0 --ticks 2
 greyfall overview        # 世界总览
 greyfall empires         # 所有阵营
 greyfall domestic        # 你的国内派系
-greyfall logs --last 20  # 最近 20 条事件日志
+greyfall logs --last 20  # 最近 20 条事件日志   ⚠ 开发版
 ```
 
 ---
@@ -624,7 +649,7 @@ greyfall insure alloys --cover 5000          # 为持仓投保
 - 先拉抬后抛售
 - 利用未公开信息交易
 
-`logs --phase market` 中可以看到相关的检测与裁罚记录。
+`logs --phase market` 中可以看到相关的检测与裁罚记录。**（⚠ 开发版）**
 
 **你的订单队列对 AI 完全可见**，它们可能抢在你之前成交。可用的规避手段：拆成多笔小额、使用冰量单、用 `--tif day`、或先发布误导信息。
 
@@ -2684,10 +2709,14 @@ greyfall import <文件路径> <槽>            # 导入
 greyfall export <槽> <路径> --plaintext    # 导出未加密状态（会提示破坏公平性）
 ```
 
-### 36.4 读档与回退
+### 36.4 读档与回退 ⚠ 开发版
+
+> 本节全部命令（`rollback` / `chronicle`）在**发布版中被屏蔽**。
+> 保留本节是因为它解释了「回退为什么会被 AI 看到」这一设计意图 ——
+> 这正是发布版要屏蔽它们的原因。
 
 ```bash
-greyfall rollback 2          # 回退 2 季
+greyfall rollback 2          # 回退 2 季   ⚠ 开发版
 ```
 
 **回退会被记录，并且 AI 能看到。** 后果：
@@ -2699,17 +2728,19 @@ greyfall rollback 2          # 回退 2 季
 查看记录：
 
 ```bash
-greyfall chronicle            # 查看完整的操作记录链
+greyfall chronicle            # 查看完整的操作记录链   ⚠ 开发版
 greyfall chronicle --last 20
 ```
 
 如果记录链文件丢失，会被判定为「档案焚毁」——所有阵营将视你为背约者，贸易与援助的优惠消失。
 
-### 36.5 历史与重放
+### 36.5 历史与重放 ⚠ 开发版
+
+> `history` / `replay` 在**发布版中被屏蔽**（会泄露逐 tick 状态轨迹）。
 
 ```bash
-greyfall history --ticks 40      # 国力与国库的历史曲线
-greyfall replay --from 7         # 从某个时间点重放并比对
+greyfall history --ticks 40      # 国力与国库的历史曲线   ⚠ 开发版
+greyfall replay --from 7         # 从某个时间点重放并比对   ⚠ 开发版
 ```
 
 ---
@@ -2736,12 +2767,12 @@ greyfall replay --from 7         # 从某个时间点重放并比对
 |---|---|
 | `save --as <槽>` | 另存为 |
 | `load <槽>` | 载入 |
-| `rollback <n>` | 回退 n 季 |
+| `rollback <n>` | 回退 n 季 ⚠ 开发版 |
 | `export <槽> <路径> [--plaintext]` | 导出 |
 | `import <路径> <槽>` | 导入 |
 | `prune --keep N` | 剪枝旧槽 |
 | `delete <槽> --yes` | 删除 |
-| `chronicle [--last N]` | 查看操作记录链 |
+| `chronicle [--last N]` | 查看操作记录链 ⚠ 开发版 |
 
 ### 世界
 
@@ -2760,11 +2791,11 @@ greyfall replay --from 7         # 从某个时间点重放并比对
 | `fleets [--id X]` | 舰队列表 |
 | `ship [<设计>]` | 舰船设计 |
 | `buildings [--planet P]` | 建筑与巨构 |
-| `logs [--last N] [--phase P]` | 事件日志 |
-| `history [--ticks N]` | 历史曲线 |
-| `replay --from <tick>` | 重放比对 |
+| `logs [--last N] [--phase P]` | 事件日志 ⚠ 开发版 |
+| `history [--ticks N]` | 历史曲线 ⚠ 开发版 |
+| `replay --from <tick>` | 重放比对 ⚠ 开发版 |
 
-`--phase` 可选值：`setup` `ap` `pending` `market` `vol` `reader` `model` `ai` `federation` `domestic` `combat` `event` `clue` `plot` `economy` `tick` `save` `chronicle`
+`--phase` 可选值（⚠ 开发版，`logs` 在发布版被屏蔽）：`setup` `ap` `pending` `market` `vol` `reader` `model` `ai` `federation` `domestic` `combat` `event` `clue` `plot` `economy` `tick` `save` `chronicle`
 
 ### 市场
 

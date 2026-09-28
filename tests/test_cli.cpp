@@ -108,6 +108,14 @@ TEST(cli, command_table_is_complete_and_unique) {
         "save", "load", "rollback", "export", "import", "prune", "delete", "chronicle", "epoch",
     };
     for (const char* r : required) {
+        // 发布版会屏蔽 5 个调试命令（logs/history/replay/rollback/chronicle），
+        // 它们仍在 `required` 列表里 —— 因为**开发版必须全部可用**，
+        // 这里只按构建类型放行，而不是把断言弱化掉。
+        if (releaseBuild() && isDebugOnlyCommand(r)) {
+            CHECK(findCommand(r) == nullptr);
+            CHECK(findManEntry(r) == nullptr);
+            continue;
+        }
         CHECK(findCommand(r) != nullptr);
         CHECK(findManEntry(r) != nullptr);
     }
@@ -146,4 +154,49 @@ TEST(cli, slot_names_are_validated) {
     }
     CHECK(threw);
     CHECK(!mgr.slotPath("main").empty());
+}
+
+// ---------------------------------------------------------------------------
+// 发布版命令屏蔽的一致性守护。
+//
+// 发布版（-DGREYFALL_RELEASE=ON）会屏蔽 5 个调试命令，屏蔽点有三处：
+//   ① commandTable()   —— help / 分发都从这里读
+//   ② manEntries()     —— `man <cmd>` 手册
+//   ③ isDebugOnlyCommand() —— 报错信息用的判定
+// 三处必须**完全一致**，否则会出现「命令不可用但手册说可用」或
+// 「报错说这是调试命令、其实能跑」这类自相矛盾。
+// 本用例把三者锁在一起，开发版与发布版都会执行同一份断言。
+// ---------------------------------------------------------------------------
+TEST(cli, release_gating_is_consistent_across_tables) {
+    static const char* kDebugOnly[] = {"logs", "history", "replay", "rollback", "chronicle"};
+    for (const char* name : kDebugOnly) {
+        CHECK(isDebugOnlyCommand(name));
+        const bool inTable = findCommand(name) != nullptr;
+        const bool inMan = findManEntry(name) != nullptr;
+        // 命令表与手册必须同进同出
+        CHECK_EQ(inTable, inMan);
+        if (releaseBuild()) {
+            // 发布版：三处都必须屏蔽
+            CHECK(!inTable);
+            CHECK(!inMan);
+        } else {
+            // 开发版：命令表与手册都必须完整可用
+            CHECK(inTable);
+            CHECK(inMan);
+        }
+    }
+    // 普通命令绝不能被误判为调试命令（否则发布版会误伤玩家功能）
+    static const char* kNormal[] = {"status", "advance", "market", "order", "new",
+                                    "empires", "build", "research", "save", "load"};
+    for (const char* name : kNormal) {
+        CHECK(!isDebugOnlyCommand(name));
+        CHECK(findCommand(name) != nullptr);
+        CHECK(findManEntry(name) != nullptr);
+    }
+}
+
+// 每个命令都必须有手册条目，反之亦然 —— 防止新增命令时漏写文档。
+TEST(cli, every_command_has_a_man_entry) {
+    for (const auto& c : commandTable())
+        CHECK(findManEntry(c.name) != nullptr);
 }

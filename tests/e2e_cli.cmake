@@ -1,6 +1,7 @@
 # 端到端 CLI 事务测试：一次进程调用 = 一个事务，无 REPL
 # 覆盖：new → status → order → advance（含退出码 5）→ choose → verify → slots → export/import
-#        → rollback（含 chronicle 记录）→ replay → epoch --report
+#        → rollback（含 chronicle 记录）→ epoch --report
+# 发布版会跳过 chronicle / rollback 段（这两个命令在发布版中被屏蔽）
 
 if(NOT DEFINED GREYFALL)
   message(FATAL_ERROR "需要 -DGREYFALL=<greyfall 可执行文件路径>")
@@ -114,17 +115,28 @@ endif()
 gf_run(0 import "${WORKDIR}/backup.gsv" restored)
 gf_run(0 --slot restored status)
 
-# 12) chronicle 链完整
-gf_run(0 chronicle)
-if(NOT GF_LAST_OUT MATCHES "完整")
-  message(FATAL_ERROR "chronicle 链校验失败：${GF_LAST_OUT}")
-endif()
+# 12~13) chronicle 链校验 + 回退 —— **仅开发版可用**。
+#
+# 发布版（-DGREYFALL_RELEASE=ON）会屏蔽 logs/history/replay/rollback/chronicle
+# 五个调试命令：它们让玩家看到全部事件记录与逐 tick 状态轨迹、并把存档回退到
+# 任意时点，直接绕开本作「信息不对称 + 不可逆抉择」的核心机制。
+# 因此这里先探测构建类型，再决定是否执行这两段 —— 而不是把断言删掉，
+# 那样开发版就失去了这部分覆盖。
+execute_process(COMMAND ${GREYFALL} chronicle
+  RESULT_VARIABLE ch_rc OUTPUT_VARIABLE ch_out ERROR_QUIET WORKING_DIRECTORY "${WORKDIR}")
+if(ch_rc EQUAL 1 AND ch_out MATCHES "发布版中不可用")
+  message(STATUS "e2e_cli：检测到发布版构建，跳过 chronicle / rollback 段")
+else()
+  gf_run(0 chronicle)
+  if(NOT GF_LAST_OUT MATCHES "完整")
+    message(FATAL_ERROR "chronicle 链校验失败：${GF_LAST_OUT}")
+  endif()
 
-# 13) 回退（写 rollbackCount）
-execute_process(COMMAND ${GREYFALL} rollback 2
-  RESULT_VARIABLE rb RESULT_VARIABLE rb OUTPUT_VARIABLE rb_out WORKING_DIRECTORY "${WORKDIR}")
-if(NOT rb EQUAL 0 AND NOT rb EQUAL 4)
-  message(FATAL_ERROR "rollback 退出码 ${rb}\n${rb_out}")
+  execute_process(COMMAND ${GREYFALL} rollback 2
+    RESULT_VARIABLE rb OUTPUT_VARIABLE rb_out WORKING_DIRECTORY "${WORKDIR}")
+  if(NOT rb EQUAL 0 AND NOT rb EQUAL 4)
+    message(FATAL_ERROR "rollback 退出码 ${rb}\n${rb_out}")
+  endif()
 endif()
 
 # 14) 纪元报告

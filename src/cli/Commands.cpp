@@ -132,6 +132,13 @@ void CliEnv::chronicleTick(u64 actionDigest) {
 
 // ---------------------------------------------------------------------------
 
+bool isDebugOnlyCommand(std::string_view name) {
+    // 与 commandTable() 中的 GF_RELEASE_BUILD 过滤保持一致 ——
+    // 两处若有分歧，报错信息就会与实际可用性矛盾。
+    return name == "logs" || name == "history" || name == "replay" ||
+           name == "rollback" || name == "chronicle";
+}
+
 const std::vector<CommandDef>& commandTable() {
     static const std::vector<CommandDef> table = {
         // 生命周期
@@ -147,12 +154,16 @@ const std::vector<CommandDef>& commandTable() {
         // 存档
         {"save", cmdSave, "存档", "另存为槽"},
         {"load", cmdLoad, "存档", "载入槽"},
+#ifndef GF_RELEASE_BUILD
         {"rollback", cmdRollback, "存档", "回退 n 个 tick"},
+#endif
         {"export", cmdExport, "存档", "导出存档文件"},
         {"import", cmdImport, "存档", "导入存档文件"},
         {"prune", cmdPrune, "存档", "剪枝旧槽"},
         {"delete", cmdDelete, "存档", "删除槽"},
+#ifndef GF_RELEASE_BUILD
         {"chronicle", cmdChronicle, "存档", "查看防读档哈希链"},
+#endif
 
         // 世界
         {"overview", cmdOverview, "世界", "世界总览"},
@@ -169,9 +180,13 @@ const std::vector<CommandDef>& commandTable() {
         {"fleets", cmdFleets, "世界", "舰队列表"},
         {"ship", cmdShip, "世界", "舰船设计"},
         {"buildings", cmdBuildings, "世界", "建筑与巨构"},
+#ifndef GF_RELEASE_BUILD
+        // 发布版屏蔽：这三个命令让玩家看到全部事件记录与逐 tick 状态轨迹，
+        // 直接绕过「信息不对称」这一核心机制。理由详见 cli/Commands.h。
         {"logs", cmdLogs, "世界", "事件日志（可过滤 AI 阶段）"},
         {"history", cmdHistory, "世界", "历史轨迹与状态哈希"},
         {"replay", cmdReplay, "世界", "从检查点重放并 diff"},
+#endif
 
         // 市场
         {"market", cmdMarket, "市场", "盘面速览（档位/spread/σ/V20）"},
@@ -314,6 +329,15 @@ int runCli(int argc, char** argv) {
     }
     const CommandDef* cmd = findCommand(args.action());
     if (cmd == nullptr) {
+        // 发布版把 5 个调试命令从表里剔除了，直接说"未知命令"会让玩家以为
+        // 命令名打错了（而文档/教程里可能还在提它们）。这里给出**准确**原因。
+        if (releaseBuild() && isDebugOnlyCommand(args.action())) {
+            fail(ExitCode::BadArgs,
+                 "命令【" + args.action() + "】在发布版中不可用 —— " +
+                     "它属于调试/开发工具（可查看全部事件记录、逐 tick 状态轨迹，"
+                     "或把存档回退到任意时点），会绕开本作「信息不对称 + 不可逆抉择」"
+                     "的核心机制。开发版可用：cmake -DGREYFALL_RELEASE=OFF 重新构建。");
+        }
         // 兼容 `greyfall market --res alloys` 这类别名（market → book/quote 组合）
         fail(ExitCode::BadArgs, "未知命令：" + args.action() + "。运行 `greyfall help` 查看全部命令。");
     }

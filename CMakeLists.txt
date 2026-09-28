@@ -25,6 +25,24 @@ target_include_directories(greyfall_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src
 target_compile_features(greyfall_core PUBLIC cxx_std_20)
 
 # ---------------------------------------------------------------------------
+# 发布版（-DGREYFALL_RELEASE=ON）：屏蔽面向调试/开发的命令
+#
+# 被屏蔽的是：logs / history / replay / rollback / chronicle。
+# 它们让玩家能**查看历史状态与事件全量记录、并把存档回退到任意时点** ——
+# 对一款以「信息不对称 + 不可逆抉择 + AI 会读取你的读档痕迹」为核心机制的作品，
+# 这些命令直接摧毁博弈前提（AI 的背叛 EV 计算里就有 rollbackCount 这一项）。
+#
+# 屏蔽发生在**命令表**层面：help / man / 分发都从同一张表读取，
+# 因此一处生效，且 `man logs` 也会如实报告「该命令不可用」。
+# 数据层（history 数组、chronicle 链文件）不受影响，开发版仍可用。
+# ---------------------------------------------------------------------------
+option(GREYFALL_RELEASE "构建发布版：屏蔽调试命令（logs/history/replay/rollback/chronicle）" OFF)
+if(GREYFALL_RELEASE)
+  target_compile_definitions(greyfall_core PUBLIC GF_RELEASE_BUILD=1)
+  message(STATUS "GREYFALL_RELEASE=ON —— 发布版：已屏蔽 logs/history/replay/rollback/chronicle")
+endif()
+
+# ---------------------------------------------------------------------------
 # 主可执行文件
 # ---------------------------------------------------------------------------
 add_executable(greyfall "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")

@@ -62,10 +62,12 @@ const std::vector<ManEntry>& manEntries() {
          "载入槽",
          "载入指定槽，并在 chronicle 链上留下一条 Load 记录（AI 可见）。",
          "greyfall load before-war"},
+#ifndef GF_RELEASE_BUILD
         {"rollback", "存档", "greyfall rollback <n>",
          "回退 n 个 tick",
          "从环形检查点回退。rollbackCount 递增并被泛视网络记录 —— AI 会据此提高要价、降低让步概率、优先采用不可逆打击。",
          "greyfall rollback 2"},
+#endif
         {"export", "存档", "greyfall export <slot> <path> [--plaintext]",
          "导出存档文件",
          "--plaintext 导出未加密状态（显式警告：破坏公平性）。",
@@ -82,10 +84,12 @@ const std::vector<ManEntry>& manEntries() {
          "删除槽",
          "不可逆操作，必须显式加 --yes。",
          "greyfall delete old-run --yes"},
+#ifndef GF_RELEASE_BUILD
         {"chronicle", "存档", "greyfall chronicle [--last N]",
          "查看防读档哈希链",
          "显示链头、链节、完整性、回退/载入计数。链文件缺失会触发「档案焚毁」。",
          "greyfall chronicle --last 20"},
+#endif
 
         {"resolve", "决议", "greyfall resolve [--detail <id>|--activate <id>|--available]",
          "决议系统",
@@ -186,12 +190,18 @@ const std::vector<ManEntry>& manEntries() {
          "舰船设计详情", "船体、模块、成本、战力系数。", "greyfall ship 隼级"},
         {"buildings", "世界", "greyfall buildings [--planet P]",
          "建筑列表", "全建筑表与已建成建筑。", "greyfall buildings"},
+#ifndef GF_RELEASE_BUILD
         {"logs", "世界", "greyfall logs [--last N] [--phase P]",
          "事件日志", "按 tick 阶段过滤；AI 决策显示 EV 分解。", "greyfall logs --phase ai --last 20"},
+#endif
+#ifndef GF_RELEASE_BUILD
         {"history", "世界", "greyfall history [--ticks N]",
          "历史轨迹", "国力/国库/指数随时间变化。", "greyfall history --ticks 40"},
+#endif
+#ifndef GF_RELEASE_BUILD
         {"replay", "世界", "greyfall replay --from <tick>",
          "重放并 diff", "从检查点逐 tick 复现，比对状态哈希。", "greyfall replay --from 12"},
+#endif
 
         // ---- 市场 ----
         {"market", "市场", "greyfall market --res <资源> [--depth 8] [--exch X]",
@@ -374,6 +384,32 @@ const std::vector<ManEntry>& manEntries() {
          "显示当前军力、军力上限、难度加成、舰队合计强度，以及补满所需季数。"
          "军力上限由经济、人口与船坞建筑决定；实际军力每季向它靠拢 5%。",
          "greyfall military"},
+        // 以下三条此前**缺失手册条目** —— 由 tests/test_cli.cpp 的
+        // `every_command_has_a_man_entry` 抓出（该用例遍历命令表做双向校验）。
+        {"queue", "运营",
+         "greyfall queue [--cancel <行星> [--index n] | --clear <行星> | --cancel-project <项目号>]",
+         "建造队列（查看 / 取消 / 清空）",
+         "建筑不再即时完成：动工时付款，逐季推进，完工后自动启用。"
+         "建造速度受建造速率修正、行星稳定度与政体效率影响。"
+         "不带参数时列出所有在建项目与剩余季数；"
+         "`--cancel <行星> [--index n]` 取消该行星第 n 项建筑，"
+         "`--clear <行星>` 清空该行星全部在建建筑，"
+         "`--cancel-project <项目号>` 取消殖民或国家工程。",
+         "greyfall queue"},
+        {"effects", "运营", "greyfall effects",
+         "增益与减益总览（效果 + 描述）",
+         "把当前**全部生效中的修正**列成一张表：属性 / 修正值 / 来源，"
+         "正值为增益、负值为减益。来源包括政体、伦理、公民特质、科技、"
+         "政策、决议、建筑与全局词缀 —— 排查「我的产出为什么是这个数」时用它。",
+         "greyfall effects"},
+        {"corruption", "运营", "greyfall corruption [--purge]",
+         "腐败（态势 / 反腐运动）",
+         "腐败随疆域扩张而上升：行星与星系越多，行政越难覆盖。"
+         "它**直接抽走收入**并推高民怨 —— 这是帝国规模的真实代价，不是"
+         "可以忽略的小数。政体决定倾向：资本主义 +30%，民主主义 -12%，"
+         "社会主义 -4%。`--purge` 发起反腐运动，花费随规模增加，"
+         "把腐败压低一档，代价是旧贵族/辛迪加/商会不满、劳工/民粹满意。",
+         "greyfall corruption --purge"},
         {"build", "运营", "greyfall build <building> <planet>",
          "建造建筑", "进入行星建筑队列。", "greyfall build 合金熔炉 7"},
         {"mega", "运营", "greyfall mega <id> <system>",
